@@ -1,0 +1,118 @@
+{% extends 'base_owner.html' %}
+{% block title %}Customer Segments{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">👥 Customer Segments</h2>
+    <p style="color:#64748b;margin-bottom:20px">View VIP, Regular, and New customer categories</p>
+    
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-bottom:20px">
+        <div style="padding:20px;background:linear-gradient(135deg,#FFD700,#FFA500);border-radius:12px;color:#fff">
+            <div style="font-size:2em;font-weight:800;margin-bottom:8px">⭐ VIP</div>
+            <div id="vipCount" style="font-size:3em;font-weight:800">0</div>
+            <div>Premium customers</div>
+        </div>
+        <div style="padding:20px;background:linear-gradient(135deg,#4ECDC4,#44A08D);border-radius:12px;color:#fff">
+            <div style="font-size:2em;font-weight:800;margin-bottom:8px">👤 Regular</div>
+            <div id="regularCount" style="font-size:3em;font-weight:800">0</div>
+            <div>Frequent customers</div>
+        </div>
+        <div style="padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:12px;color:#fff">
+            <div style="font-size:2em;font-weight:800;margin-bottom:8px">🆕 New</div>
+            <div id="newCount" style="font-size:3em;font-weight:800">0</div>
+            <div>Recent customers</div>
+        </div>
+    </div>
+    
+    <div style="margin-bottom:20px">
+        <button class="btn" onclick="loadSegments()">🔄 Refresh Segments</button>
+    </div>
+    
+    <div id="segmentsContainer"></div>
+</div>
+
+<script>
+(function(){
+    const token = localStorage.getItem('authToken') || '';
+    
+    window.loadSegments = async function(){
+        try{
+            const response = await fetch('/api/advanced/customers/segments', {
+                headers: {'Authorization': 'Bearer ' + token}
+            });
+            const data = await response.json();
+            
+            // Update counts
+            document.getElementById('vipCount').textContent = data.vip.count || 0;
+            document.getElementById('regularCount').textContent = data.regular.count || 0;
+            document.getElementById('newCount').textContent = data.new.count || 0;
+            
+            // Display customers
+            const container = document.getElementById('segmentsContainer');
+            if(!container) return;
+            
+            container.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:20px">
+                    <!-- VIP Customers -->
+                    <div style="background:#fff3cd;border:2px solid #FFD700;border-radius:12px;padding:20px">
+                        <div style="font-weight:800;font-size:1.2em;margin-bottom:16px;color:#1e40af">⭐ VIP Customers (${data.vip.count})</div>
+                        <div style="max-height:400px;overflow-y:auto">
+                            ${data.vip.customers && data.vip.customers.length > 0 ? 
+                                data.vip.customers.map(c => `
+                                    <div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:8px;border:1px solid #FFD700">
+                                        <div style="font-weight:700;margin-bottom:4px">${c.name}</div>
+                                        <div style="color:#64748b;font-size:0.9em;margin-bottom:4px">${c.email}</div>
+                                        <div style="color:#22c55e;font-weight:700">${c.total_orders} orders</div>
+                                    </div>
+                                `).join('') : 
+                                '<div style="color:#64748b;text-align:center;padding:20px">No VIP customers yet</div>'
+                            }
+                        </div>
+                    </div>
+                    
+                    <!-- Regular Customers -->
+                    <div style="background:#dbeafe;border:2px solid #4ECDC4;border-radius:12px;padding:20px">
+                        <div style="font-weight:800;font-size:1.2em;margin-bottom:16px;color:#1e40af">👤 Regular Customers (${data.regular.count})</div>
+                        <div style="max-height:400px;overflow-y:auto">
+                            ${data.regular.customers && data.regular.customers.length > 0 ? 
+                                data.regular.customers.map(c => `
+                                    <div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:8px;border:1px solid #4ECDC4">
+                                        <div style="font-weight:700;margin-bottom:4px">${c.name}</div>
+                                        <div style="color:#64748b;font-size:0.9em;margin-bottom:4px">${c.email}</div>
+                                        <div style="color:#22c55e;font-weight:700">${c.total_orders} orders</div>
+                                    </div>
+                                `).join('') : 
+                                '<div style="color:#64748b;text-align:center;padding:20px">No regular customers yet</div>'
+                            }
+                        </div>
+                    </div>
+                    
+                    <!-- New Customers -->
+                    <div style="background:#f3e8ff;border:2px solid #667eea;border-radius:12px;padding:20px">
+                        <div style="font-weight:800;font-size:1.2em;margin-bottom:16px;color:#1e40af">🆕 New Customers (${data.new.count})</div>
+                        <div style="max-height:400px;overflow-y:auto">
+                            ${data.new.customers && data.new.customers.length > 0 ? 
+                                data.new.customers.map(c => `
+                                    <div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:8px;border:1px solid #667eea">
+                                        <div style="font-weight:700;margin-bottom:4px">${c.name}</div>
+                                        <div style="color:#64748b;font-size:0.9em;margin-bottom:4px">${c.email}</div>
+                                        <div style="color:#22c55e;font-weight:700">${c.total_orders} order</div>
+                                    </div>
+                                `).join('') : 
+                                '<div style="color:#64748b;text-align:center;padding:20px">No new customers yet</div>'
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+        }catch(e){
+            console.error('Load segments error:', e);
+            document.getElementById('segmentsContainer').innerHTML = '<div style="color:#ef4444;padding:20px;text-align:center">Failed to load customer segments.</div>';
+        }
+    };
+    
+    // Auto-load on page load
+    loadSegments();
+})();
+</script>
+{% endblock %}
+

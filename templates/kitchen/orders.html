@@ -1,0 +1,133 @@
+{% extends 'base_kitchen.html' %}
+{% block title %}Kitchen Orders{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">📦 Kitchen Orders</h2>
+    <div id="kitchenOrdersRoot">Loading...</div>
+</div>
+<script>
+(function(){
+  const token = localStorage.getItem('authToken') || '';
+  async function load(){
+    try {
+      const res = await fetch('/api/kitchen/orders/live', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
+      const orders = await res.json();
+      const root = document.getElementById('kitchenOrdersRoot');
+      if (!Array.isArray(orders) || orders.length === 0) { root.textContent = 'No orders.'; return; }
+      const vip_orders = orders.filter(o=>o.is_vip||(o.kitchen_notes&&o.kitchen_notes.includes('[IMPORTANT]')));
+      const regular_orders = orders.filter(o=>!o.is_vip&&(!o.kitchen_notes||!o.kitchen_notes.includes('[IMPORTANT]')));
+      root.innerHTML = (vip_orders.length ? '<div style="font-weight:800;color:var(--primary);margin-bottom:12px;padding:8px;background:#fff3cd;border-radius:8px;border-left:4px solid var(--primary)">⭐ VIP / IMPORTANT ORDERS</div>' : '') + vip_orders.map(o => {
+        const s = (o.status||'').toLowerCase();
+        let label = '';
+        if (s==='pending' || s==='accepted') label = 'Start Preparing';
+        else if (s==='preparing') label = 'Mark Completed';
+        else if (s==='ready') label = 'Expire Coupon';
+        else label = 'Completed';
+        const disabled = (s==='delivered') ? 'disabled' : '';
+        return `
+        <div style="border-bottom:1px solid #eee;padding:10px 0;border-left:4px solid var(--primary);padding-left:12px;background:#fff3cd;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div><strong>#${o.id}</strong> — ₹${o.total} ${o.is_vip ? '<span class="badge accepted">VIP</span>' : ''} ${(o.kitchen_notes&&o.kitchen_notes.includes('[IMPORTANT]')) ? '<span class="badge preparing">IMPORTANT</span>' : ''}</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button class="btn ghost" onclick="showIngredients(${o.db_id})">📋 Ingredients</button>
+              <button class="btn" ${disabled} onclick="step(${o.db_id}, '${s}')">${label}</button>
+            </div>
+          </div>
+          <div style="color:#777;margin-top:6px;">${(o.items||[]).map(i=>`${i.icon||''} ${i.name} x${i.quantity}`).join(', ')}</div>
+          <div id="ingredients_${o.db_id}" style="margin-top:12px;display:none;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb;"></div>
+        </div>`;
+      }).join('') + (regular_orders.length ? '<div style="font-weight:800;color:#64748b;margin-top:20px;margin-bottom:12px;padding:8px">Regular Orders</div>' : '') + regular_orders.map(o => {
+        const s = (o.status||'').toLowerCase();
+        let label = '';
+        if (s==='pending' || s==='accepted') label = 'Start Preparing';
+        else if (s==='preparing') label = 'Mark Completed';
+        else if (s==='ready') label = 'Expire Coupon';
+        else label = 'Completed';
+        const disabled = (s==='delivered') ? 'disabled' : '';
+        return `
+        <div style="border-bottom:1px solid #eee;padding:10px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div><strong>#${o.id}</strong> — ₹${o.total}</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button class="btn ghost" onclick="showIngredients(${o.db_id})">📋 Ingredients</button>
+              <button class="btn" ${disabled} onclick="step(${o.db_id}, '${s}')">${label}</button>
+            </div>
+          </div>
+          <div style="color:#777;margin-top:6px;">${(o.items||[]).map(i=>`${i.icon||''} ${i.name} x${i.quantity}`).join(', ')}</div>
+          <div id="ingredients_${o.db_id}" style="margin-top:12px;display:none;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb;"></div>
+        </div>`;
+      }).join('');
+    } catch(e) { document.getElementById('kitchenOrdersRoot').textContent = 'Failed to load.'; }
+  }
+  window.step = async function(id, s){
+    try{
+      let next = null;
+      if(s==='pending' || s==='accepted') next = 'preparing';
+      else if(s==='preparing') next = 'ready';
+      else if(s==='ready') next = 'delivered';
+      if(!next) return;
+      await fetch(`/api/kitchen/orders/${id}/status`, { method:'PUT', headers: { 'Authorization': token ? 'Bearer ' + token : '', 'Content-Type':'application/json' }, body: JSON.stringify({status: next}) });
+      load();
+    }catch(e){ /* no-op */ }
+  };
+  
+  window.showIngredients = async function(orderId){
+    const ingDiv = document.getElementById('ingredients_' + orderId);
+    if(!ingDiv) return;
+    
+    if(ingDiv.style.display === 'none' || ingDiv.style.display === ''){
+      ingDiv.style.display = 'block';
+      ingDiv.innerHTML = 'Loading ingredients checklist...';
+      
+      try{
+        const response = await fetch('/api/advanced/orders/' + orderId + '/ingredients', {
+          headers: {'Authorization': token ? 'Bearer ' + token : ''}
+        });
+        const data = await response.json();
+        
+        if(data.ingredients && data.ingredients.length > 0){
+          ingDiv.innerHTML = `
+            <div style="font-weight:700;margin-bottom:12px;color:#1e40af;">📋 Ingredient Checklist</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
+              ${data.ingredients.map(function(ing){
+                return `
+                  <div style="padding:8px;background:#fff;border-radius:8px;border:1px solid #e5e7eb;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                      <input type="checkbox" style="width:18px;height:18px;cursor:pointer;" onchange="updateIngredientCheck(this, '${ing.name}')">
+                      <span style="flex:1;"><strong>${ing.name}</strong></span>
+                      <span style="color:#64748b;">x${ing.quantity}</span>
+                    </label>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+            <div style="margin-top:12px;padding:8px;background:#dbeafe;border-radius:8px;color:#1e40af;">
+              <strong>Total Items:</strong> ${data.total_items} items in this order
+            </div>
+          `;
+        } else {
+          ingDiv.innerHTML = '<div style="color:#64748b;">No ingredient information available.</div>';
+        }
+      }catch(e){
+        ingDiv.innerHTML = '<div style="color:#ef4444;">Failed to load ingredients.</div>';
+      }
+    } else {
+      ingDiv.style.display = 'none';
+    }
+  };
+  
+  window.updateIngredientCheck = function(checkbox, ingredientName){
+    if(checkbox.checked){
+      checkbox.parentElement.style.textDecoration = 'line-through';
+      checkbox.parentElement.style.opacity = '0.6';
+    } else {
+      checkbox.parentElement.style.textDecoration = '';
+      checkbox.parentElement.style.opacity = '1';
+    }
+  };
+  load();
+})();
+</script>
+{% endblock %}
+
+

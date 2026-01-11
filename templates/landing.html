@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MMCOE Smart Canteen</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+        
+        /* Animated Background */
+        .landing-page { 
+            min-height: 100vh; 
+            background: linear-gradient(135deg, #faff6b 0%, #FFB347 50%, #fa8f8f 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 15s ease infinite;
+            position: relative; 
+            overflow: hidden; 
+        }
+        
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        /* Enhanced Food Background */
+        .bg-food { 
+            position: fixed; 
+            inset: 0; 
+            pointer-events: none; 
+            z-index: 0; 
+        }
+        .food { 
+            position: absolute; 
+            font-size: 80px; 
+            opacity: 0.12; 
+            animation: float 12s ease-in-out infinite;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1));
+        }
+        .food:nth-child(2) { animation-delay: -2s; animation-duration: 14s; }
+        .food:nth-child(3) { animation-delay: -4s; animation-duration: 10s; }
+        .food:nth-child(4) { animation-delay: -6s; animation-duration: 16s; }
+        .food:nth-child(5) { animation-delay: -8s; animation-duration: 11s; }
+        .food:nth-child(6) { animation-delay: -10s; animation-duration: 13s; }
+        
+        @keyframes float { 
+            0%, 100% { transform: translateY(0) rotate(0deg); } 
+            25% { transform: translateY(-20px) rotate(5deg); }
+            50% { transform: translateY(-10px) rotate(-5deg); } 
+            75% { transform: translateY(-30px) rotate(3deg); }
+        }
+        
+        /* Navbar */
+        .navbar { 
+            position: fixed; 
+            top: 0; 
+            width: 100%; 
+            padding: 20px 50px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            z-index: 1000; 
+            background: rgba(255,255,255,0.1); 
+            backdrop-filter: blur(15px);
+            transition: all 0.3s ease;
+        }
+        
+        .navbar.scrolled {
+            background: rgba(255,255,255,0.95);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .navbar.scrolled .logo,
+        .navbar.scrolled .nav-links a {
+            color: #FF6B6B;
+        }
+        
+        .logo { 
+            font-size: 1.8em; 
+            font-weight: 700; 
+            color: white; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px;
+            transition: transform 0.3s;
+        }
+        
+        .logo:hover {
+            transform: scale(1.05);
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+        
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: white;
+            transition: width 0.3s;
+        }
+        
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+        
+        .btn-login { 
+            background: white;
+            color: #FF6B6B; 
+            padding: 12px 30px; 
+            border-radius: 30px; 
+            font-weight: 700; 
+            border: none; 
+            cursor: pointer; 
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(255,255,255,0.3);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 4px 15px rgba(255,255,255,0.3); }
+            50% { transform: scale(1.05); box-shadow: 0 6px 25px rgba(255,255,255,0.5); }
+        }
+        
+        .btn-login:hover { 
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 8px 30px rgba(255,255,255,0.6);
+            animation: none;
+        }
+        
+        /* Hero Section */
+        .hero-main { 
+            min-height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between;
+            padding: 120px 50px 50px;
+            gap: 50px;
+        }
+        
+        .hero-content { 
+            flex: 1;
+            max-width: 600px; 
+            color: white;
+            opacity: 0;
+            animation: fadeInUp 1s ease forwards;
+        }
+        
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .hero-content h1 { 
+            font-size: 3.5em; 
+            margin-bottom: 20px; 
+            font-weight: 800;
+            line-height: 1.2;
+        }
+        
+        .hero-content .typing {
+            border-right: 3px solid white;
+            animation: blink 0.7s step-end infinite;
+        }
+        
+        @keyframes blink {
+            from, to { border-color: transparent; }
+            50% { border-color: white; }
+        }
+        
+        .hero-content p { 
+            font-size: 1.3em; 
+            margin-bottom: 40px; 
+            opacity: 0.95;
+            line-height: 1.6;
+        }
+        
+        .hero-buttons {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-hero { 
+            padding: 16px 35px; 
+            font-size: 1.1em; 
+            font-weight: 700; 
+            border-radius: 35px; 
+            border: none; 
+            cursor: pointer; 
+            background: white; 
+            color: #FF6B6B; 
+            transition: all 0.3s;
+            box-shadow: 0 4px 20px rgba(255,255,255,0.3);
+        }
+        
+        .btn-hero:hover { 
+            transform: scale(1.08) translateY(-2px);
+            box-shadow: 0 8px 30px rgba(255,255,255,0.5);
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+        
+        .btn-secondary:hover {
+            background: white;
+            color: #FF6B6B;
+        }
+        
+        .hero-visual {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            animation: fadeIn 1s ease 0.5s forwards;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .phone-mockup {
+            width: 300px;
+            height: 600px;
+            background: white;
+            border-radius: 40px;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.3);
+            padding: 15px;
+            position: relative;
+            animation: floatPhone 3s ease-in-out infinite;
+        }
+        
+        @keyframes floatPhone {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            font-size: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .phone-screen::before {
+            content: '📱';
+            position: absolute;
+            font-size: 100px;
+            opacity: 0.1;
+        }
+        
+        /* Stats Section */
+        .stats-section {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 40px 50px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 30px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            color: white;
+        }
+        
+        .stat-number {
+            font-size: 3em;
+            font-weight: 800;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        /* Features Section */
+        .features-section {
+            padding: 100px 50px;
+            background: white;
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 2.5em;
+            font-weight: 800;
+            color: #2C3E50;
+            margin-bottom: 20px;
+        }
+        
+        .section-subtitle {
+            text-align: center;
+            font-size: 1.2em;
+            color: #7F8C8D;
+            margin-bottom: 60px;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .feature-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 30px;
+            border-radius: 20px;
+            text-align: center;
+            color: white;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(102, 126, 234, 0.4);
+        }
+        
+        .feature-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            display: block;
+        }
+        
+        .feature-title {
+            font-size: 1.5em;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+        
+        .feature-desc {
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+        
+        /* How It Works */
+        .how-section {
+            padding: 100px 50px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        }
+        
+        .steps-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .step {
+            flex: 1;
+            min-width: 200px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .step-number {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #FF6B6B 0%, #FFB347 100%);
+            color: white;
+            font-size: 2em;
+            font-weight: 800;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.3);
+        }
+        
+        .step-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #2C3E50;
+            margin-bottom: 10px;
+        }
+        
+        .step-desc {
+            color: #7F8C8D;
+            line-height: 1.6;
+        }
+        
+        /* Modal Styles */
+        .login-modal { 
+            display: none; 
+            position: fixed; 
+            inset: 0; 
+            background: rgba(0,0,0,0.8); 
+            z-index: 10001; 
+            justify-content: center; 
+            align-items: center;
+            backdrop-filter: blur(5px);
+            animation: fadeIn 0.3s ease;
+        }
+        .login-modal.active { display: flex; }
+        
+        .login-box { 
+            background: white; 
+            border-radius: 30px; 
+            padding: 40px; 
+            max-width: 500px; 
+            width: 90%; 
+            position: relative; 
+            max-height: 90vh; 
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .close-modal { 
+            position: absolute; 
+            top: 20px; 
+            right: 20px; 
+            font-size: 2em; 
+            cursor: pointer; 
+            color: #2C3E50;
+            transition: transform 0.3s;
+        }
+        
+        .close-modal:hover {
+            transform: rotate(90deg);
+        }
+        
+        .form-tabs { 
+            display: flex; 
+            gap: 15px; 
+            margin-bottom: 30px; 
+        }
+        
+        .tab-btn { 
+            flex: 1; 
+            padding: 14px; 
+            border: none; 
+            background: #F8F9FA; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            font-weight: 700;
+            transition: all 0.3s;
+        }
+        
+        .tab-btn.active { 
+            background: linear-gradient(135deg, #FF6B6B 0%, #FFB347 100%); 
+            color: white;
+            transform: scale(1.05);
+        }
+        
+        .form-content { display: none; }
+        .form-content.active { display: block; }
+        
+        .form-group { margin-bottom: 20px; }
+        .form-group label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 600;
+            color: #2C3E50;
+        }
+        
+        .form-group input, 
+        .form-group select, 
+        .form-group textarea { 
+            width: 100%; 
+            padding: 12px; 
+            border: 2px solid #E8E8E8; 
+            border-radius: 10px; 
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #FF6B6B;
+        }
+        
+        .btn-submit { 
+            width: 100%; 
+            padding: 15px; 
+            background: linear-gradient(135deg, #FF6B6B 0%, #FFB347 100%); 
+            color: white; 
+            border: none; 
+            border-radius: 10px; 
+            font-weight: 700; 
+            cursor: pointer; 
+            margin-top: 10px;
+            transition: all 0.3s;
+        }
+        
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+        
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .navbar { padding: 15px 20px; }
+            .nav-links { display: none; }
+            .hero-main { 
+                flex-direction: column; 
+                padding: 100px 20px 50px;
+                text-align: center;
+            }
+            .hero-content h1 { font-size: 2.5em; }
+            .hero-visual { margin-top: 30px; }
+            .phone-mockup { width: 250px; height: 500px; }
+            .stats-section { padding: 30px 20px; }
+            .features-section, .how-section { padding: 60px 20px; }
+            .food { font-size: 60px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Food Background -->
+    <div class="bg-food" aria-hidden="true">
+        <span class="food" style="left:5%;top:10%">🍕</span>
+        <span class="food" style="right:8%;top:20%">☕</span>
+        <span class="food" style="left:10%;bottom:15%">🍔</span>
+        <span class="food" style="right:5%;bottom:10%">🍜</span>
+        <span class="food" style="left:50%;top:15%">🍰</span>
+        <span class="food" style="right:30%;bottom:25%">🥗</span>
+    </div>
+
+    <!-- Landing Page -->
+    <div class="landing-page">
+        <!-- Navbar -->
+        <nav class="navbar" id="navbar">
+            <div class="logo">
+                <span>🍽️</span>
+                <span>MMCOE Smart Canteen</span>
+            </div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#about">About</a>
+                <button class="btn-login" onclick="window.showLoginModal()">Order Now</button>
+            </div>
+        </nav>
+
+        <!-- Hero Section -->
+        <section class="hero-main">
+            <div class="hero-content">
+                <h1>Delicious Food, <span class="typing">One Click Away!</span></h1>
+                <p>Experience the future of canteen ordering. Fast, easy, and delicious meals delivered to your table with zero wait time.</p>
+                <div class="hero-buttons">
+                    <button class="btn-hero" onclick="window.showLoginModal()">Get Started</button>
+                    <button class="btn-hero btn-secondary" onclick="document.getElementById('features').scrollIntoView({behavior: 'smooth'})">Learn More</button>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="phone-mockup">
+                    <div class="phone-screen">
+                        🍕
+                        🍔
+                        🍜
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats Section -->
+        <div class="stats-section">
+            <div class="stat-item">
+                <span class="stat-number" data-target="500">0</span>
+                <span class="stat-label">Orders Today</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" data-target="1200">0</span>
+                <span class="stat-label">Happy Students</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">5</span>
+                <span class="stat-label">Min Avg Time</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">4.8★</span>
+                <span class="stat-label">Rating</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <section class="features-section" id="features">
+        <h2 class="section-title">Why Choose Us?</h2>
+        <p class="section-subtitle">Experience the best food ordering system designed for students</p>
+        <div class="features-grid">
+            <div class="feature-card">
+                <span class="feature-icon">⚡</span>
+                <div class="feature-title">Lightning Fast</div>
+                <div class="feature-desc">Order in seconds and get your food delivered to your table without any waiting</div>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">📱</span>
+                <div class="feature-title">Real-Time Tracking</div>
+                <div class="feature-desc">Track your order status live from preparation to delivery</div>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">💳</span>
+                <div class="feature-title">Easy Payment</div>
+                <div class="feature-desc">Multiple payment options with secure digital wallet integration</div>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">🎯</span>
+                <div class="feature-title">Smart Queue</div>
+                <div class="feature-desc">AI-powered queue management for minimal wait times</div>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">🌟</span>
+                <div class="feature-title">Quality Food</div>
+                <div class="feature-desc">Fresh, hygienic, and delicious meals prepared by expert chefs</div>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">🎁</span>
+                <div class="feature-title">Rewards & Offers</div>
+                <div class="feature-desc">Earn points on every order and unlock exclusive discounts</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="how-section" id="how-it-works">
+        <h2 class="section-title">How It Works</h2>
+        <p class="section-subtitle">Order your favorite food in 3 simple steps</p>
+        <div class="steps-container">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-title">Browse Menu</div>
+                <div class="step-desc">Explore our delicious menu items with photos and prices</div>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-title">Place Order</div>
+                <div class="step-desc">Add items to cart and checkout securely in seconds</div>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-title">Enjoy Food</div>
+                <div class="step-desc">Get notified when ready and collect from counter</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="login-modal">
+        <div class="login-box">
+            <span class="close-modal" onclick="window.closeLoginModal()">×</span>
+            <div class="form-tabs">
+                <button class="tab-btn active" onclick="window.switchTab('signup')">Sign Up</button>
+                <button class="tab-btn" onclick="window.switchTab('login')">Login</button>
+            </div>
+            <div id="signupForm" class="form-content active">
+                <h2 style="margin-bottom: 20px;">Create Account</h2>
+                <div id="signupAlert"></div>
+                <div class="form-group"><label>Full Name</label><input type="text" id="signupName" placeholder="Enter your full name"></div>
+                <div class="form-group"><label>Email</label><input type="email" id="signupEmail" placeholder="Enter your email"></div>
+                <div class="form-group"><label>Phone</label><input type="tel" id="signupPhone" placeholder="Enter your phone"></div>
+                <div class="form-group"><label>College ID</label><input type="text" id="signupCollegeId" placeholder="Enter college ID"></div>
+                <div class="form-group"><label>Department</label><input type="text" id="signupDepartment" placeholder="e.g., Computer Science"></div>
+                <div class="form-group"><label>Year</label>
+                    <select id="signupYear">
+                        <option value="">Select Year</option>
+                        <option value="1st Year">1st Year</option>
+                        <option value="2nd Year">2nd Year</option>
+                        <option value="3rd Year">3rd Year</option>
+                        <option value="4th Year">4th Year</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Address</label><textarea id="signupAddress" rows="2" placeholder="Enter your address"></textarea></div>
+                <div class="form-group"><label>Password</label><input type="password" id="signupPassword" placeholder="Create password (min 6 characters)"></div>
+                <button class="btn-submit" id="otpButton" onclick="window.initiateOTP()">Send OTP</button>
+                <div id="otpSection" style="display:none; margin-top: 20px;">
+                    <div class="form-group"><label>Enter OTP</label><input type="text" id="otpInput" placeholder="Enter 4-digit OTP" maxlength="4"></div>
+                    <button class="btn-submit" id="verifyButton" onclick="window.handleSignup()">Verify & Sign Up</button>
+                </div>
+            </div>
+            <div id="loginForm" class="form-content">
+                <h2 style="margin-bottom: 20px;">Welcome Back</h2>
+                <div id="loginAlert"></div>
+                <div class="form-group"><label>Email / College ID</label><input type="text" id="loginEmail" placeholder="Enter email or college ID"></div>
+                <div class="form-group"><label>Password</label><input type="password" id="loginPassword" placeholder="Enter password"></div>
+<<<<<<< HEAD
+                <div class="form-group" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                    <input type="checkbox" id="loginRememberMe" style="width:18px;height:18px;cursor:pointer;">
+                    <label for="loginRememberMe" style="margin:0;font-weight:500;font-size:0.9em;color:#64748b;cursor:pointer;">Keep me logged in</label>
+                </div>
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+                <button class="btn-submit" id="loginButton" onclick="window.handleLogin()">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Ensure functions are available on page load
+        console.log('Landing page script loaded');
+
+        // Navbar scroll effect
+        window.addEventListener('scroll', function() {
+            const navbar = document.getElementById('navbar');
+            if (navbar && window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else if (navbar) {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        // Counter animation
+        function animateCounter(el) {
+            const target = parseInt(el.getAttribute('data-target'));
+            if (isNaN(target)) return;
+            
+            const duration = 2000;
+            const step = target / (duration / 16);
+            let current = 0;
+            
+            const timer = setInterval(() => {
+                current += step;
+                if (current >= target) {
+                    el.textContent = target + '+';
+                    clearInterval(timer);
+                } else {
+                    el.textContent = Math.floor(current);
+                }
+            }, 16);
+        }
+
+        // Trigger counter animation on scroll
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const counters = document.querySelectorAll('.stat-number[data-target]');
+                    counters.forEach(counter => animateCounter(counter));
+                    observer.unobserve(entry.target);
+                }
+            });
+        });
+
+        const statsSection = document.querySelector('.stats-section');
+        if (statsSection) observer.observe(statsSection);
+
+        // Modal functions - Make sure they're globally accessible
+        window.showLoginModal = function() { 
+            console.log('showLoginModal called');
+            const m = document.getElementById('loginModal'); 
+            if (m) {
+                m.classList.add('active');
+                document.body.style.overflow = 'hidden'; // Prevent background scrolling
+                // Reset forms when opening
+                const signupAlert = document.getElementById('signupAlert');
+                const loginAlert = document.getElementById('loginAlert');
+                const otpSection = document.getElementById('otpSection');
+                if (signupAlert) signupAlert.innerHTML = '';
+                if (loginAlert) loginAlert.innerHTML = '';
+                if (otpSection) otpSection.style.display = 'none';
+                window._otp = null;
+                console.log('Modal opened');
+            } else {
+                console.error('Modal element not found!');
+            }
+        };
+        
+        window.closeLoginModal = function() { 
+            const m = document.getElementById('loginModal'); 
+            if (m) {
+                m.classList.remove('active');
+                document.body.style.overflow = ''; // Restore scrolling
+            }
+            const signupAlert = document.getElementById('signupAlert');
+            const loginAlert = document.getElementById('loginAlert');
+            if (signupAlert) signupAlert.innerHTML = ''; 
+            if (loginAlert) loginAlert.innerHTML = ''; 
+        };
+        
+
+        // Close modal when clicking outside (on the modal overlay)
+        document.addEventListener('click', function(e) {
+            const modal = document.getElementById('loginModal');
+            if (modal && modal.classList.contains('active')) {
+                // Close if clicking directly on modal background (overlay)
+                if (e.target === modal) {
+                    window.closeLoginModal();
+                }
+            }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                window.closeLoginModal();
+            }
+        });
+        
+        window.switchTab = function(tab) { 
+            const tabs = document.querySelectorAll('.tab-btn'); 
+            const forms = document.querySelectorAll('.form-content'); 
+            tabs.forEach(t => t.classList.remove('active')); 
+            forms.forEach(f => f.classList.remove('active')); 
+            if (tab === 'signup') { 
+                if (tabs[0]) tabs[0].classList.add('active'); 
+                const signupForm = document.getElementById('signupForm');
+                if (signupForm) signupForm.classList.add('active'); 
+            } else { 
+                if (tabs[1]) tabs[1].classList.add('active'); 
+                const loginForm = document.getElementById('loginForm');
+                if (loginForm) loginForm.classList.add('active'); 
+            } 
+        };
+        
+        function showAlert(elId, msg, type) { 
+            const el = document.getElementById(elId); 
+            if (!el) return; 
+            const bg = type === 'success' ? '#d4edda' : type === 'error' ? '#f8d7da' : '#d1ecf1'; 
+            const col = type === 'success' ? '#155724' : type === 'error' ? '#721c24' : '#0c5460'; 
+            el.innerHTML = '<div style="padding:12px;border-radius:10px;margin-bottom:12px;background:'+bg+';color:'+col+';font-weight:600;">'+msg+'</div>'; 
+            setTimeout(() => { if (el) el.innerHTML = ''; }, 4000); 
+        }
+        
+        function disableButton(id, dis) { 
+            const b = document.getElementById(id); 
+            if (b) b.disabled = !!dis; 
+        }
+        
+        // Make all onclick functions globally accessible
+        window.initiateOTP = async function() { 
+            const email = document.getElementById('signupEmail').value.trim(); 
+            const name = document.getElementById('signupName').value.trim(); 
+            if (!name || !email) { 
+                showAlert('signupAlert', 'Please enter name and email first', 'error'); 
+                return; 
+            } 
+            try { 
+                disableButton('otpButton', true); 
+                showAlert('signupAlert', 'Sending OTP...', 'info'); 
+                const resp = await fetch('/api/auth/generate-otp', {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({email, name})
+                }); 
+                const res = await resp.json(); 
+                if (resp.ok) { 
+                    window._otp = res.otp; 
+                    document.getElementById('otpSection').style.display = 'block'; 
+                    showAlert('signupAlert', 'OTP sent! (Demo OTP: '+res.otp+')', 'success'); 
+                } else { 
+                    throw new Error(res.error || 'Failed to send OTP'); 
+                } 
+            } catch (e) { 
+                window._otp = String(Math.floor(1000 + Math.random() * 9000)); 
+                document.getElementById('otpSection').style.display = 'block'; 
+                showAlert('signupAlert', 'Backend unavailable. Demo OTP: '+window._otp, 'info'); 
+            } finally { 
+                disableButton('otpButton', false); 
+            } 
+        }
+        
+        window.handleSignup = async function() { 
+            const name = document.getElementById('signupName').value.trim(); 
+            const email = document.getElementById('signupEmail').value.trim(); 
+            const phone = document.getElementById('signupPhone').value.trim(); 
+            const college_id = document.getElementById('signupCollegeId').value.trim(); 
+            const department = document.getElementById('signupDepartment').value.trim(); 
+            const year = document.getElementById('signupYear').value; 
+            const address = document.getElementById('signupAddress').value.trim(); 
+            const password = document.getElementById('signupPassword').value; 
+            const otp = (document.getElementById('otpInput').value || '').trim(); 
+            
+            if (!name || !email || !phone || !college_id || !department || !year || !address || !password || !otp) { 
+                showAlert('signupAlert', 'Please fill all fields', 'error'); 
+                return; 
+            } 
+            
+            // Client-side OTP validation (optional - backend will also validate)
+            if (window._otp && otp !== String(window._otp)) { 
+                showAlert('signupAlert', 'Invalid OTP. Please check and try again.', 'error'); 
+                return; 
+            } 
+            
+            try { 
+                disableButton('verifyButton', true); 
+                showAlert('signupAlert', 'Creating account...', 'info'); 
+                const resp = await fetch('/api/auth/signup', {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({name, email, phone, college_id, department, year, address, password, otp})
+                }); 
+                const res = await resp.json(); 
+                
+                if (!resp.ok) throw new Error(res.error || 'Signup failed'); 
+                
+                localStorage.setItem('authToken', res.token); 
+                localStorage.setItem('currentUser', JSON.stringify(res.user)); 
+                showAlert('signupAlert', 'Account created!', 'success'); 
+                
+                setTimeout(() => { 
+                    window.closeLoginModal(); 
+                    location.href = res.user && res.user.role === 'kitchen' ? '/kitchen/dashboard' : '/customer/browse-menu'; 
+                }, 900); 
+            } catch (e) { 
+                showAlert('signupAlert', e.message, 'error'); 
+            } finally { 
+                disableButton('verifyButton', false); 
+            } 
+        }
+        
+        window.handleLogin = async function() { 
+            const email = document.getElementById('loginEmail').value.trim(); 
+            const password = document.getElementById('loginPassword').value; 
+            
+            if (!email || !password) { 
+                showAlert('loginAlert', 'Please enter both email and password', 'error'); 
+                return; 
+            } 
+            
+            try { 
+                disableButton('loginButton', true); 
+                showAlert('loginAlert', 'Logging in...', 'info'); 
+                
+                let sendEmail = email, sendPass = password; 
+                if (email.toLowerCase() === 'owner' && password === '123') { 
+                    sendEmail = 'owner@test.com'; 
+                    sendPass = 'pass123'; 
+                } 
+                if (email.toLowerCase() === 'kitchen' && password === '123') { 
+                    sendEmail = 'kitchen@test.com'; 
+                    sendPass = 'pass123'; 
+                } 
+                
+<<<<<<< HEAD
+                const rememberMe = document.getElementById('loginRememberMe') ? document.getElementById('loginRememberMe').checked : false;
+                const resp = await fetch('/api/auth/login', {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({email: sendEmail, password: sendPass, remember_me: rememberMe})
+=======
+                const resp = await fetch('/api/auth/login', {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({email: sendEmail, password: sendPass})
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+                }); 
+                const res = await resp.json(); 
+                
+                if (!resp.ok) throw new Error(res.error || 'Login failed'); 
+                
+                localStorage.setItem('authToken', res.token); 
+                localStorage.setItem('currentUser', JSON.stringify(res.user)); 
+                showAlert('loginAlert', 'Login successful!', 'success'); 
+                
+                setTimeout(() => { 
+                    window.closeLoginModal(); 
+                    if (res.user.role === 'owner') location.href = '/owner/dashboard'; 
+                    else if (res.user.role === 'kitchen') location.href = '/kitchen/dashboard'; 
+                    else location.href = '/customer/browse-menu'; 
+                }, 700); 
+            } catch (e) { 
+                showAlert('loginAlert', e.message, 'error'); 
+            } finally { 
+                disableButton('loginButton', false); 
+            } 
+        }
+    </script>
+</body>
+</html>

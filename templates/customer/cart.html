@@ -1,0 +1,748 @@
+{% extends 'base_customer.html' %}
+{% block title %}My Cart{% endblock %}
+{% block content %}
+<style>
+.cart-header {
+  background: linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%);
+  padding: 30px;
+  border-radius: 15px;
+  margin-bottom: 25px;
+  color: white;
+}
+.payment-status {
+  padding: 12px;
+  border-radius: 10px;
+  margin: 10px 0;
+  text-align: center;
+  font-weight: 600;
+}
+.payment-status.checking {
+  background: #FEF3C7;
+  color: #92400E;
+}
+.payment-status.success {
+  background: #D1FAE5;
+  color: #065F46;
+}
+.payment-status.error {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+.qr-code-box {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  margin: 15px 0;
+  border: 2px solid #E5E7EB;
+}
+</style>
+
+<div class="cart-header">
+  <h2>🛒 My Cart</h2>
+  <p style="opacity: 0.95;">Review your items before checkout</p>
+</div>
+
+<div class="card">
+    <div id="cartRoot">Loading...</div>
+    <div id="cartActions" style="display:none;margin-top:16px;border-top:2px solid #f0f0f0;padding-top:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="font-weight:800;font-size:1.3em;color:#FF6B6B">Total: <span id="cartTotal">₹0</span></div>
+            <div style="display:flex;gap:8px;">
+                <button id="addMoreBtn" class="btn ghost">← Add More</button>
+                <button id="payBtn" class="btn">Proceed to Payment →</button>
+            </div>
+        </div>
+        
+<<<<<<< HEAD
+        <div id="walletInfo" style="display:none;"></div>
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        <div id="paymentBox" style="display:none;background:linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);border:2px solid #DBEAFE;border-radius:15px;padding:20px;margin-top:15px;">
+            <div style="font-weight:800;font-size:1.2em;margin-bottom:15px;color:#2C3E50;">💳 Complete Payment</div>
+            <div id="paymentUi">Generating payment link...</div>
+            <div id="paymentStatus" class="payment-status checking" style="display:none;">
+                Waiting for payment confirmation...
+            </div>
+            <div style="margin-top:15px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+                <button id="manualCheckBtn" class="btn" style="display:none;">🔄 Check Status</button>
+                <button id="cancelBtn" class="btn ghost">✕ Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+    (function(){
+      const root = document.getElementById('cartRoot');
+      const actions = document.getElementById('cartActions');
+      const totalEl = document.getElementById('cartTotal');
+      const paymentBox = document.getElementById('paymentBox');
+      const paymentUi = document.getElementById('paymentUi');
+      const statusDiv = document.getElementById('paymentStatus');
+      
+      let pendingPayment = null;
+      let checkInterval = null;
+      let checkAttempts = 0;
+      const MAX_ATTEMPTS = 120; // 4 minutes (120 * 2 seconds)
+      const INITIAL_POLL_INTERVAL = 2000; // Check every 2 seconds initially
+      const POLL_INTERVAL = 3000; // Then check every 3 seconds
+      
+      function getCart(){ 
+        try{ return JSON.parse(localStorage.getItem('cart')||'[]'); }
+        catch(_){ return []; } 
+      }
+      
+      function setCart(c){ 
+        localStorage.setItem('cart', JSON.stringify(c)); 
+      }
+      
+      function updItem(idx, delta){
+        const cart = getCart();
+        cart[idx].quantity += delta;
+        if(cart[idx].quantity <= 0) cart.splice(idx, 1);
+        setCart(cart);
+        if(window.updateCartUI){ try{ window.updateCartUI(); }catch(_){} }
+        render();
+      }
+      
+      function delItem(idx){
+        if(!confirm('Remove this item from cart?')) return;
+        const cart = getCart();
+        cart.splice(idx, 1);
+        setCart(cart);
+        if(window.updateCartUI){ try{ window.updateCartUI(); }catch(_){} }
+        render();
+      }
+      
+      function render(){ 
+        const cart = getCart(); 
+        if(cart.length===0){ 
+          root.innerHTML='<div style="text-align:center;padding:40px;color:#9CA3AF;"><div style="font-size:4em;margin-bottom:15px;">🛒</div><h3>Your cart is empty</h3><p>Browse our menu to add delicious items!</p><a href="/customer/browse-menu" class="btn" style="margin-top:15px;text-decoration:none;display:inline-block;">Browse Menu</a></div>'; 
+          actions.style.display='none'; 
+          if(window.updateCartUI){ try{ window.updateCartUI(); }catch(_){} } 
+          return; 
+        } 
+        
+        actions.style.display='block'; 
+        let total=0; 
+        root.innerHTML = cart.map(function(it, idx){
+          const t = it.price * it.quantity;
+          total += t;
+          return '<div class="cart-item" data-index="' + idx + '" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding:12px 0"><div style="display:flex;align-items:center;gap:12px;"><div style="font-size:2em;">' + (it.icon||'🍽️') + '</div><div><strong style="font-size:1.1em;">' + it.name + '</strong><div class="muted">₹' + it.price + ' each</div></div></div><div style="display:flex;align-items:center;gap:8px;"><button class="btn-upd btn ghost" data-action="minus" style="padding:8px 12px;">-</button><span style="min-width:35px;text-align:center;font-weight:800;font-size:1.1em;">' + it.quantity + '</span><button class="btn-upd btn ghost" data-action="plus" style="padding:8px 12px;">+</button><span style="width:90px;text-align:right;font-weight:800;font-size:1.2em;color:#FF6B6B;">₹' + t + '</span><button class="btn-del btn ghost" style="padding:8px 12px;color:#ef4444;">✕</button></div></div>';
+        }).join(''); 
+        
+        totalEl.textContent = '₹' + total;
+        
+        root.querySelectorAll('.btn-upd').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            const item = this.closest('.cart-item');
+            const idx = parseInt(item.dataset.index);
+            const action = this.dataset.action;
+            updItem(idx, action === 'plus' ? 1 : -1);
+          });
+        });
+        
+        root.querySelectorAll('.btn-del').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            const item = this.closest('.cart-item');
+            const idx = parseInt(item.dataset.index);
+            delItem(idx);
+          });
+        });
+      }
+      
+      function stopPolling(){
+        if(checkInterval){
+          console.log('[PAYMENT] Stopping polling');
+          clearInterval(checkInterval);
+          checkInterval = null;
+        }
+        checkAttempts = 0;
+      }
+      
+      function cancelPayment(){ 
+        console.log('[PAYMENT] Cancelling payment');
+        stopPolling();
+        pendingPayment = null; 
+        paymentBox.style.display = 'none'; 
+        paymentUi.innerHTML = ''; 
+        statusDiv.style.display = 'none';
+        const manualBtn = document.getElementById('manualCheckBtn'); 
+        if(manualBtn) manualBtn.style.display = 'none'; 
+        // Clear saved pending payment
+        try{ localStorage.removeItem('pendingPayment'); }catch(_){}
+      }
+      
+      document.getElementById('cancelBtn').addEventListener('click', cancelPayment);
+      
+      async function checkPaymentStatus(){
+        try{
+          if(!pendingPayment || !pendingPayment.token){
+            console.log('[PAYMENT] No pending payment');
+            return false;
+          }
+          
+          checkAttempts++;
+          console.log('[PAYMENT] Attempt ' + checkAttempts + '/' + MAX_ATTEMPTS);
+          
+          // Stop after max attempts
+          if(checkAttempts >= MAX_ATTEMPTS){
+            console.log('[PAYMENT] Max attempts reached, stopping');
+            stopPolling();
+            statusDiv.className = 'payment-status error';
+            statusDiv.innerHTML = '⏱️ Payment timeout. Please check manually or try again.';
+            statusDiv.style.display = 'block';
+            const manualBtn = document.getElementById('manualCheckBtn'); 
+            if(manualBtn) manualBtn.style.display = 'inline-block';
+            return false;
+          }
+          
+          // Always use relative URL for status check to avoid CSP issues
+          const statusUrl = '/demo/pay/' + pendingPayment.token + '/status';
+          console.log('[PAYMENT] Checking status:', statusUrl);
+          
+          const response = await fetch(statusUrl, { 
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-cache'
+          });
+          
+          if(!response.ok){
+            console.error('[PAYMENT] HTTP Error:', response.status);
+            // Don't stop polling on temporary errors - continue checking
+            statusDiv.className = 'payment-status checking';
+            statusDiv.innerHTML = '🔄 Checking payment... (' + checkAttempts + '/' + MAX_ATTEMPTS + ')';
+            statusDiv.style.display = 'block';
+            return false;
+          }
+          
+          const data = await response.json();
+          console.log('[PAYMENT] Status response:', data);
+          
+          const status = String(data.status || '').toLowerCase().trim();
+          console.log('[PAYMENT] Payment status:', status);
+          
+          // Update UI with attempt count
+          statusDiv.className = 'payment-status checking';
+          statusDiv.innerHTML = '🔄 Checking payment... (' + checkAttempts + '/' + MAX_ATTEMPTS + ')';
+          statusDiv.style.display = 'block';
+          
+          if(status === 'paid'){
+            console.log('[PAYMENT] ✅ Payment confirmed!');
+            stopPolling();
+            
+            statusDiv.className = 'payment-status success';
+            statusDiv.innerHTML = '✅ Payment confirmed! Creating your order...';
+            statusDiv.style.display = 'block';
+            
+            // Wait a moment for user to see success message
+            setTimeout(function(){
+              confirmPayment();
+            }, 800);
+            
+            return true;
+          } else if(status === 'failed' || status === 'cancelled'){
+            console.log('[PAYMENT] ❌ Payment failed/cancelled');
+            stopPolling();
+            
+            statusDiv.className = 'payment-status error';
+            statusDiv.innerHTML = '❌ Payment ' + status + '. Please try again.';
+            statusDiv.style.display = 'block';
+            
+            return false;
+          }
+          
+          // Payment still pending - continue polling
+          return false;
+        }catch(e){
+          console.error('[PAYMENT] Check error:', e);
+          // Don't stop polling on errors - continue checking (might be network issue)
+          statusDiv.className = 'payment-status checking';
+          statusDiv.innerHTML = '🔄 Checking payment... (' + checkAttempts + '/' + MAX_ATTEMPTS + ')';
+          statusDiv.style.display = 'block';
+          return false;
+        }
+      }
+      
+      function manualCheckPayment(){
+        console.log('[PAYMENT] Manual check triggered');
+        if(!pendingPayment || !pendingPayment.token){
+          alert('❌ No payment pending');
+          return;
+        }
+        
+        statusDiv.className = 'payment-status checking';
+        statusDiv.innerHTML = '🔄 Checking payment status...';
+        statusDiv.style.display = 'block';
+        
+        checkPaymentStatus().then(function(success){
+          if(!success && checkAttempts < MAX_ATTEMPTS){
+            statusDiv.className = 'payment-status error';
+            statusDiv.innerHTML = '⚠️ Payment not confirmed yet. Click "Pay Now" on the payment page.';
+          }
+        });
+      }
+      
+      document.getElementById('manualCheckBtn').addEventListener('click', manualCheckPayment);
+      
+      document.getElementById('addMoreBtn').addEventListener('click', function(){ 
+        location.href='/customer/browse-menu'; 
+      });
+      
+      document.getElementById('payBtn').addEventListener('click', function(){ 
+<<<<<<< HEAD
+        showPaymentOptions(); 
+      });
+      
+      let walletBalance = 0;
+      
+      // Load wallet balance
+      async function loadWalletBalance(){
+        try{
+          const token = localStorage.getItem('authToken') || '';
+          if(!token) return;
+          const res = await fetch('/api/user/wallet', {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          if(res.ok){
+            const data = await res.json();
+            walletBalance = data.wallet_balance || 0;
+            updateWalletDisplay();
+          }
+        }catch(e){
+          console.error('Error loading wallet:', e);
+        }
+      }
+      
+      function updateWalletDisplay(){
+        const walletInfo = document.getElementById('walletInfo');
+        if(walletInfo){
+          if(walletBalance > 0){
+            walletInfo.innerHTML = `<div style="background:linear-gradient(135deg, #22c55e, #16a34a);color:white;padding:12px;border-radius:10px;margin-bottom:10px;text-align:center;">
+              <div style="font-size:0.9em;opacity:0.9;">💰 Wallet Balance</div>
+              <div style="font-size:1.5em;font-weight:700;">₹${walletBalance.toFixed(2)}</div>
+            </div>`;
+            walletInfo.style.display = 'block';
+          } else {
+            walletInfo.style.display = 'none';
+          }
+        }
+      }
+      
+      function showPaymentOptions(){
+        const cart = getCart();
+        if(cart.length === 0){
+          alert('⚠️ Your cart is empty!');
+          return;
+        }
+        
+        const amount = cart.reduce(function(s, i){ 
+          return s + (i.price * i.quantity); 
+        }, 0);
+        
+        // Show payment method selection
+        let paymentOptions = '<div style="text-align:center;padding:20px;"><div style="font-weight:800;font-size:1.2em;margin-bottom:20px;color:#2C3E50;">💳 Select Payment Method</div>';
+        paymentOptions += '<div style="font-size:1.3em;font-weight:700;color:#FF6B6B;margin-bottom:20px;">Total: ₹' + amount + '</div>';
+        
+        if(walletBalance >= amount){
+          paymentOptions += '<button id="payWalletBtn" class="btn" style="width:100%;margin-bottom:10px;background:linear-gradient(135deg, #22c55e, #16a34a);padding:15px;font-size:1.1em;font-weight:700;">💰 Pay with Wallet (₹' + walletBalance.toFixed(2) + ' available)</button>';
+        } else if(walletBalance > 0){
+          paymentOptions += '<div style="background:#FEF3C7;color:#92400E;padding:12px;border-radius:8px;margin-bottom:10px;font-size:0.9em;">⚠️ Wallet balance (₹' + walletBalance.toFixed(2) + ') is less than total (₹' + amount + ')</div>';
+        }
+        
+        paymentOptions += '<button id="payOnlineBtn" class="btn" style="width:100%;background:linear-gradient(135deg, #667eea, #764ba2);padding:15px;font-size:1.1em;font-weight:700;">💳 Pay Online</button>';
+        paymentOptions += '<button id="cancelPaymentBtn" class="btn ghost" style="width:100%;margin-top:10px;">Cancel</button>';
+        paymentOptions += '</div>';
+        
+        paymentBox.style.display = 'block';
+        paymentUi.innerHTML = paymentOptions;
+        statusDiv.style.display = 'none';
+        
+        document.getElementById('cancelPaymentBtn').addEventListener('click', function(){
+          cancelPayment();
+        });
+        
+        if(walletBalance >= amount){
+          document.getElementById('payWalletBtn').addEventListener('click', function(){
+            proceedPaymentWithWallet(amount);
+          });
+        }
+        
+        document.getElementById('payOnlineBtn').addEventListener('click', function(){
+          proceedPayment();
+        });
+      }
+      
+      async function proceedPaymentWithWallet(amount){
+        const cart = getCart();
+        const token = localStorage.getItem('authToken') || '';
+        
+        paymentUi.innerHTML = '<div style="text-align:center;padding:20px;"><div style="font-size:3em;margin-bottom:10px;">⏳</div><p>Processing wallet payment...</p></div>';
+        statusDiv.style.display = 'none';
+        
+        try{
+          // Create order with wallet payment
+          const orderRes = await fetch('/api/orders/create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': token ? ('Bearer ' + token) : ''
+            },
+            body: JSON.stringify({ 
+              items: cart.map(function(i){ 
+                return { id: i.id, quantity: i.quantity }; 
+              }), 
+              total: amount, 
+              payment_method: 'wallet',
+              transaction_id: 'WALLET'
+            })
+          });
+          
+          const orderResult = await orderRes.json();
+          
+          if(!orderRes.ok || orderResult.error){
+            throw new Error(orderResult.error || 'Order creation failed');
+          }
+          
+          // Save coupon
+          const coupons = JSON.parse(localStorage.getItem('coupons') || '[]'); 
+          coupons.unshift({ 
+            id: orderResult.coupon_id, 
+            orderId: orderResult.order_id, 
+            qrData: orderResult.qr_data, 
+            expired: false,
+            timestamp: Date.now()
+          }); 
+          localStorage.setItem('coupons', JSON.stringify(coupons)); 
+          
+          // Clear cart
+          setCart([]); 
+          if(window.updateCartUI){ 
+            try{ window.updateCartUI(); }
+            catch(_){} 
+          }
+          
+          // Reload wallet balance
+          await loadWalletBalance();
+          
+          statusDiv.className = 'payment-status success';
+          statusDiv.innerHTML = '✅ Order placed successfully with wallet payment!';
+          statusDiv.style.display = 'block';
+          
+          // Redirect after showing success
+          setTimeout(function(){
+            window.location.href = '/customer/coupons';
+          }, 1500);
+          
+        }catch(error){
+          console.error('[WALLET PAYMENT] Error:', error);
+          statusDiv.className = 'payment-status error';
+          statusDiv.innerHTML = '❌ ' + error.message;
+          statusDiv.style.display = 'block';
+          alert('❌ Payment failed: ' + error.message);
+        }
+      }
+      
+=======
+        proceedPayment(); 
+      });
+      
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+      function proceedPayment(){ 
+        const cart = getCart(); 
+        if(cart.length === 0){
+          alert('⚠️ Your cart is empty!');
+          return;
+        }
+        
+        paymentBox.style.display = 'block'; 
+        paymentUi.innerHTML = '<div style="text-align:center;padding:20px;"><div style="font-size:3em;margin-bottom:10px;">⏳</div><p>Generating payment link...</p></div>'; 
+        statusDiv.style.display = 'none';
+        
+        const amount = cart.reduce(function(s, i){ 
+          return s + (i.price * i.quantity); 
+        }, 0);
+        
+        fetch('/demo/create-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            amount: amount, 
+            note: 'MMCOE Order - Cart Total: ₹' + amount 
+          })
+        })
+        .then(function(response){
+          if(!response.ok) throw new Error('Failed to create payment');
+          return response.json();
+        })
+        .then(function(data){
+          if(!data || data.error){
+            throw new Error(data.error || 'Failed to create payment');
+          }
+          
+          pendingPayment = data;
+          console.log('[PAYMENT] Payment created:', data);
+          
+          // Use relative URL for the payment link to avoid domain issues
+          const payLink = data.pay_url_relative || data.pay_url || '/demo/pay/' + data.token;
+          
+          // Save to localStorage for recovery
+          try{
+            localStorage.setItem('pendingPayment', JSON.stringify({
+              token: data.token,
+              amount: amount,
+              timestamp: Date.now(),
+              pay_url: data.pay_url,
+              pay_url_relative: data.pay_url_relative || payLink,
+              status_url: data.status_url || '/demo/pay/' + data.token + '/status'
+            }));
+          }catch(_){}
+          
+          const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(data.pay_url || payLink);
+          
+          paymentUi.innerHTML = '<div class="qr-code-box"><div style="font-weight:700;font-size:1.1em;margin-bottom:15px;color:#2C3E50;">📱 Scan to Pay</div><img src="' + qrUrl + '" alt="Payment QR Code" style="max-width:220px;border-radius:10px;"><div style="margin-top:15px;"><a href="' + payLink + '" target="_blank" class="btn" id="openPayBtn" onclick="window.open(\'' + payLink + '\', \'payment\', \'width=500,height=600\')">Open Payment Page →</a></div><div style="color:#6B7280;font-size:0.9em;margin-top:10px;">Amount: <strong>₹' + amount + '</strong></div></div>';
+          
+          statusDiv.className = 'payment-status checking';
+          statusDiv.innerHTML = '⏱️ Waiting for payment confirmation...';
+          statusDiv.style.display = 'block';
+          
+          const manualBtn = document.getElementById('manualCheckBtn'); 
+          if(manualBtn) manualBtn.style.display = 'inline-block';
+          
+          // Reset counter
+          checkAttempts = 0;
+          
+          // Start aggressive polling - check more frequently for cross-device payment detection
+          stopPolling(); // Clear any existing interval
+          
+          // Poll every 1.5 seconds for better cross-device payment detection
+          // This ensures payment completed on another device is detected quickly
+          let pollCount = 0;
+          const FAST_POLL_INTERVAL = 1500; // 1.5 seconds for cross-device detection
+          const SLOW_POLL_INTERVAL = 3000; // 3 seconds after 2 minutes
+          
+          checkInterval = setInterval(function(){
+            pollCount++;
+            // After 80 checks (2 minutes at 1.5s intervals), switch to 3 second intervals
+            if(pollCount > 80){
+              clearInterval(checkInterval);
+              checkInterval = setInterval(function(){
+                checkPaymentStatus();
+              }, SLOW_POLL_INTERVAL);
+              checkPaymentStatus(); // Immediate check after switching
+              return;
+            }
+            checkPaymentStatus();
+          }, FAST_POLL_INTERVAL);
+          
+          // Also check on page visibility change (when user switches tabs/apps)
+          // This is crucial for detecting payments made on another device
+          document.addEventListener('visibilitychange', function(){
+            if(!document.hidden && pendingPayment && pendingPayment.token){
+              console.log('[PAYMENT] Page visible - checking payment immediately (cross-device check)');
+              checkPaymentStatus();
+            }
+          });
+          
+          // Check when window regains focus (user returns from payment page)
+          window.addEventListener('focus', function onFocus(){
+            console.log('[PAYMENT] Window focused - checking payment (cross-device check)');
+            if(pendingPayment && pendingPayment.token){
+              setTimeout(function(){
+                checkPaymentStatus();
+              }, 300);
+            }
+          });
+          
+          // Also check when user comes back online (in case they scanned QR and paid offline then reconnected)
+          window.addEventListener('online', function(){
+            console.log('[PAYMENT] Network online - checking payment');
+            if(pendingPayment && pendingPayment.token){
+              setTimeout(function(){
+                checkPaymentStatus();
+              }, 300);
+            }
+          });
+          
+          // Listen for postMessage from payment page (if same origin)
+          window.addEventListener('message', function(event){
+            console.log('[PAYMENT] Message received:', event.data);
+            if(event.data && event.data.type === 'payment_completed'){
+              if(event.data.token === pendingPayment.token){
+                console.log('[PAYMENT] Payment completion message confirmed');
+                stopPolling();
+                confirmPayment();
+              }
+            }
+          });
+          
+          // Immediate first check after 1 second
+          setTimeout(function(){
+            checkPaymentStatus();
+          }, 1000);
+        })
+        .catch(function(error){
+          console.error('[PAYMENT] Error:', error);
+          paymentUi.innerHTML = '<div style="text-align:center;padding:20px;color:#EF4444;"><div style="font-size:3em;margin-bottom:10px;">❌</div><p>' + error.message + '</p></div>';
+          statusDiv.style.display = 'none';
+        });
+      }
+      
+      function confirmPayment(){
+        console.log('[PAYMENT] Confirming payment and creating order');
+        
+        const cart = getCart(); 
+        const amount = cart.reduce(function(s, i){ 
+          return s + (i.price * i.quantity); 
+        }, 0);
+        const token = localStorage.getItem('authToken') || ''; 
+        
+        statusDiv.className = 'payment-status checking';
+        statusDiv.innerHTML = '📦 Creating your order...';
+        statusDiv.style.display = 'block';
+        
+        fetch('/api/orders/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? ('Bearer ' + token) : ''
+          },
+          body: JSON.stringify({ 
+            items: cart.map(function(i){ 
+              return { id: i.id, quantity: i.quantity }; 
+            }), 
+            total: amount, 
+            transaction_id: (pendingPayment && pendingPayment.token) || 'OFFLINE_' + Date.now()
+          })
+        })
+        .then(function(response){
+          if(!response.ok) throw new Error('Order creation failed');
+          return response.json();
+        })
+        .then(function(result){
+          if(!result || result.error){
+            throw new Error(result.error || 'Order failed');
+          }
+          
+          console.log('[ORDER] Order created:', result);
+          
+          // Save coupon
+          const coupons = JSON.parse(localStorage.getItem('coupons') || '[]'); 
+          coupons.unshift({ 
+            id: result.coupon_id, 
+            orderId: result.order_id, 
+            qrData: result.qr_data, 
+            expired: false,
+            timestamp: Date.now()
+          }); 
+          localStorage.setItem('coupons', JSON.stringify(coupons)); 
+          
+          // Clear cart
+          setCart([]); 
+          if(window.updateCartUI){ 
+            try{ window.updateCartUI(); }
+            catch(_){} 
+          }
+          
+          // Clear pending payment
+          try{ localStorage.removeItem('pendingPayment'); }catch(_){}
+          
+          statusDiv.className = 'payment-status success';
+          statusDiv.innerHTML = '✅ Order placed successfully!';
+          statusDiv.style.display = 'block';
+          
+          // Redirect after showing success
+          setTimeout(function(){
+            window.location.href = '/customer/coupons';
+          }, 1500);
+        })
+        .catch(function(error){
+          console.error('[ORDER] Error:', error);
+          statusDiv.className = 'payment-status error';
+          statusDiv.innerHTML = '❌ ' + error.message;
+          statusDiv.style.display = 'block';
+          alert('❌ Order creation failed: ' + error.message);
+        });
+      }
+      
+      // Check for pending payment on page load
+      window.addEventListener('DOMContentLoaded', function(){
+        try{
+          const saved = localStorage.getItem('pendingPayment');
+          if(saved){
+            const pending = JSON.parse(saved);
+            // Check if payment is recent (within 10 minutes)
+            if(pending.timestamp && (Date.now() - pending.timestamp) < 600000){
+              console.log('[PAYMENT] Found pending payment, checking status');
+              pendingPayment = pending;
+              paymentBox.style.display = 'block';
+              statusDiv.className = 'payment-status checking';
+              statusDiv.innerHTML = '🔄 Checking previous payment...';
+              statusDiv.style.display = 'block';
+              
+              // Restore payment UI - use relative URL
+              const restorePayLink = pending.pay_url_relative || pending.pay_url || '/demo/pay/' + pending.token;
+              const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(pending.pay_url || restorePayLink);
+              paymentUi.innerHTML = '<div class="qr-code-box"><div style="font-weight:700;font-size:1.1em;margin-bottom:15px;color:#2C3E50;">📱 Scan to Pay</div><img src="' + qrUrl + '" alt="Payment QR Code" style="max-width:220px;border-radius:10px;"><div style="margin-top:15px;"><a href="' + restorePayLink + '" target="_blank" class="btn" id="openPayBtn" onclick="window.open(\'' + restorePayLink + '\', \'payment\', \'width=500,height=600\')">Open Payment Page →</a></div><div style="color:#6B7280;font-size:0.9em;margin-top:10px;">Amount: <strong>₹' + (pending.amount || '0') + '</strong></div></div>';
+              
+              const manualBtn = document.getElementById('manualCheckBtn'); 
+              if(manualBtn) manualBtn.style.display = 'inline-block';
+              
+              // Start polling immediately
+              stopPolling();
+              let pollCount = 0;
+              let useInitialInterval = true;
+              checkInterval = setInterval(function(){
+                pollCount++;
+                // After 30 checks (60 seconds at 2s intervals), switch to 3 second intervals
+                if(pollCount > 30 && useInitialInterval){
+                  useInitialInterval = false;
+                  clearInterval(checkInterval);
+                  checkInterval = setInterval(function(){
+                    checkPaymentStatus();
+                  }, POLL_INTERVAL);
+                  checkPaymentStatus(); // Immediate check after switching
+                  return;
+                }
+                checkPaymentStatus();
+              }, INITIAL_POLL_INTERVAL);
+              
+              // Also add event listeners
+              document.addEventListener('visibilitychange', function(){
+                if(!document.hidden && pendingPayment && pendingPayment.token){
+                  console.log('[PAYMENT] Page visible - checking payment immediately');
+                  checkPaymentStatus();
+                }
+              });
+              
+              window.addEventListener('focus', function onFocus(){
+                console.log('[PAYMENT] Window focused - checking payment');
+                if(pendingPayment && pendingPayment.token){
+                  setTimeout(function(){
+                    checkPaymentStatus();
+                  }, 500);
+                }
+              });
+              
+              // First check
+              setTimeout(function(){
+                checkPaymentStatus();
+              }, 1000);
+            }
+          }
+        }catch(_){}
+      });
+      
+      // Initial render
+      render();
+<<<<<<< HEAD
+      loadWalletBalance();
+      
+      // Refresh wallet balance every 30 seconds
+      setInterval(loadWalletBalance, 30000);
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+    })();
+    </script>
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}{% if self.title() %}{{ super() }}{% else %}Kitchen{% endif %}{% endblock %}
+{% block sidenav %}
+<div class="group-title">Kitchen</div>
+<a class="side-link" href="/kitchen/dashboard">Dashboard</a>
+<a class="side-link" href="/kitchen/orders">Orders</a>
+<a class="side-link" href="/kitchen/history">History</a>
+<a class="side-link" href="/kitchen/expire-coupons">Expire Coupons</a>
+{% endblock %}
+{% block content %}{{ super() }}{% endblock %}
+
+<script>
+(function(){ var sb=document.getElementById('sidebar'); if(sb) sb.classList.add('theme-kitchen'); })();
+</script>
+
+

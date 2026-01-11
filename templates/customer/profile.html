@@ -1,0 +1,127 @@
+{% extends 'base_customer.html' %}
+{% block title %}My Profile{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">👤 My Profile</h2>
+    <div id="profileRoot">Loading...</div>
+</div>
+<script>
+(async function(){
+  const token = localStorage.getItem('authToken') || '';
+  if (!token) {
+    document.getElementById('profileRoot').innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">❌ Not logged in. Please <a href="/login/customer">login</a> to view your profile.</div>';
+    return;
+  }
+  
+  try {
+    // Verify current user from localStorage first
+    const currentUserStr = localStorage.getItem('currentUser');
+    let currentUser = null;
+    try {
+      if (currentUserStr) {
+        currentUser = JSON.parse(currentUserStr);
+      }
+    } catch(e) {
+      console.error('Error parsing currentUser:', e);
+    }
+    
+    // Fetch fresh user data from API
+    const response = await fetch('/api/user/profile', {
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({error: 'Failed to fetch profile'}));
+      throw new Error(errorData.error || 'Failed to fetch profile');
+    }
+    
+    const data = await response.json();
+    if (!data.success || !data.user) {
+      const errorMsg = data.error || 'Invalid profile data';
+      document.getElementById('profileRoot').innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;">❌ ${errorMsg}</div>`;
+      return;
+    }
+    
+    const user = data.user;
+    
+    // Allow any role to view their own profile (removed restrictive check)
+    // Profile page is accessible to all authenticated users to view their own information
+    
+<<<<<<< HEAD
+    // Do not block on localStorage mismatch; trust server profile as source of truth
+=======
+    // Verify user ID matches
+    if (currentUser && currentUser.id && currentUser.id !== user.id) {
+      console.error('User ID mismatch:', currentUser.id, 'vs', user.id);
+      document.getElementById('profileRoot').innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">❌ Profile data mismatch. Please log out and log in again.</div>';
+      return;
+    }
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+    
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+      if (!text) return '—';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+<<<<<<< HEAD
+    // Build profile HTML with only customer-relevant fields and wallet card
+=======
+    // Build profile HTML with only customer-relevant fields
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+    document.getElementById('profileRoot').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
+        <div style="background:linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);border:2px solid #DBEAFE;border-radius:12px;padding:20px;">
+          <div style="font-weight:800;margin-bottom:16px;color:#1E40AF;font-size:1.1em;">👤 Personal Information</div>
+          <div style="margin-bottom:12px;padding:8px;background:white;border-radius:8px;"><strong style="color:#475569;">Name:</strong> <span style="color:#1e293b;">${escapeHtml(user.name)}</span></div>
+          <div style="margin-bottom:12px;padding:8px;background:white;border-radius:8px;"><strong style="color:#475569;">Email:</strong> <span style="color:#1e293b;">${escapeHtml(user.email)}</span></div>
+          <div style="margin-bottom:12px;padding:8px;background:white;border-radius:8px;"><strong style="color:#475569;">Phone:</strong> <span style="color:#1e293b;">${escapeHtml(user.phone)}</span></div>
+          <div style="margin-bottom:12px;padding:8px;background:white;border-radius:8px;"><strong style="color:#475569;">College ID:</strong> <span style="color:#1e293b;">${escapeHtml(user.college_id)}</span></div>
+          ${user.is_vip ? '<div style="margin-bottom:12px;padding:8px;background:linear-gradient(135deg, #FFD700, #FFA500);border-radius:8px;"><strong style="color:#8B4513;">⭐ VIP Member</strong></div>' : ''}
+        </div>
+        <div style="background:linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);border:2px solid #DBEAFE;border-radius:12px;padding:20px;">
+          <div style="font-weight:800;margin-bottom:16px;color:#1E40AF;font-size:1.1em;">🎓 Academic Details</div>
+          <div style="margin-bottom:12px;padding:8px;background:white;border-radius:8px;"><strong style="color:#475569;">Department:</strong> <span style="color:#1e293b;">${escapeHtml(user.department || 'Not specified')}</span></div>
+          <div style="margin-bottom:12px;padding:8px;background:white;border-radius:8px;"><strong style="color:#475569;">Year:</strong> <span style="color:#1e293b;">${escapeHtml(user.year || 'Not specified')}</span></div>
+          <div style="margin-bottom:12px;padding:8px;background:white;border-radius:8px;"><strong style="color:#475569;">Address:</strong> <span style="color:#1e293b;">${escapeHtml(user.address || 'Not specified')}</span></div>
+          <div style="margin-bottom:12px;padding:8px;background:white;border-radius:8px;"><strong style="color:#475569;">Member Since:</strong> <span style="color:#1e293b;">${user.created_at && user.created_at.trim() ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</span></div>
+        </div>
+<<<<<<< HEAD
+        <div style="background:linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);border:2px solid #DBEAFE;border-radius:12px;padding:20px;">
+          <div style="font-weight:800;margin-bottom:16px;color:#1E40AF;font-size:1.1em;">💼 Wallet</div>
+          <div id="walletBalance" style="margin-bottom:12px;padding:12px;background:white;border-radius:8px;display:flex;align-items:center;justify-content:space-between;">
+            <span style="color:#475569;font-weight:600;">Balance</span>
+            <span style="color:#16a34a;font-weight:800;">₹ —</span>
+          </div>
+          <div class="muted">Wallet is used for refunds and quick payments.</div>
+        </div>
+      </div>
+    `;
+
+    // Load wallet balance
+    try {
+      const wr = await fetch('/api/user/wallet', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (wr.ok) {
+        const wd = await wr.json();
+        if (wd && wd.success) {
+          var wb = document.querySelector('#walletBalance span:last-child');
+          if (wb) wb.textContent = '₹ ' + (Math.round((wd.wallet_balance || 0) * 100) / 100).toFixed(2);
+        }
+      }
+    } catch(e) { /* ignore wallet errors for profile */ }
+=======
+      </div>
+    `;
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+  } catch(e) {
+    console.error('Profile load error:', e);
+    document.getElementById('profileRoot').innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">❌ Failed to load profile. Please try again later.</div>';
+  }
+})();
+</script>
+{% endblock %}

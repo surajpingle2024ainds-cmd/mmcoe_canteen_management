@@ -1,0 +1,247 @@
+{% extends 'base_customer.html' %}
+{% block title %}Browse Menu{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">🍽️ Browse Menu</h2>
+    
+    <!-- Combos Section -->
+    <div style="margin-bottom:30px;">
+        <h3 style="color:#1e40af;margin-bottom:16px;font-size:1.3em;font-weight:800;">🍱 Special Combos</h3>
+        <div id="combosGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:20px;"></div>
+        <div id="combosEmpty" class="muted" style="display:none;text-align:center;padding:20px;">No combos available at the moment.</div>
+    </div>
+    
+    <!-- Regular Menu Items -->
+    <div style="border-top:2px solid #e5e7eb;padding-top:20px;">
+        <h3 style="color:#1e40af;margin-bottom:16px;font-size:1.3em;font-weight:800;">🍽️ Menu Items</h3>
+        <input id="menuSearch" placeholder="🔍 Search dishes..." style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;margin:6px 0 12px;">
+        <div id="menuCategories" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <button class="btn ghost category-btn" data-cat="all">All</button>
+        </div>
+        <div id="menuGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px"></div>
+        <div id="menuEmpty" class="muted" style="display:none">No items available.</div>
+    </div>
+    
+    <div style="margin-top:20px;text-align:right"><a class="btn" href="/customer/cart">Go to Cart →</a></div>
+    <script>
+    (function(){
+      const grid = document.getElementById('menuGrid');
+      const empty = document.getElementById('menuEmpty');
+      const search = document.getElementById('menuSearch');
+      const cats = document.getElementById('menuCategories');
+      let all = [];
+      let currentCat = 'all';
+      function getCart(){ try{ return JSON.parse(localStorage.getItem('cart')||'[]'); }catch(_){ return []; } }
+      function setCart(c){ localStorage.setItem('cart', JSON.stringify(c)); }
+      function addToCart(item){ 
+        const cart=getCart(); 
+        const f=cart.find(x=>x.id===item.id); 
+        if(f){ 
+          f.quantity+=1; 
+        } else { 
+          cart.push({ id:item.id, name:item.name, price:item.price, icon:item.icon, quantity:1 }); 
+        } 
+        setCart(cart); 
+        if(window.updateCartUI){ try{ window.updateCartUI(); }catch(_){} } 
+        const btn=document.getElementById('btn_'+item.id); 
+        if(btn){ 
+          const t=btn.textContent; 
+<<<<<<< HEAD
+          const prevBg = btn.style.background; 
+          const prevColor = btn.style.color;
+          btn.textContent='✓ Added to Cart'; 
+          btn.style.background='#22c55e'; 
+          btn.style.color='#ffffff';
+          btn.style.fontWeight='700';
+          setTimeout(function(){ 
+            btn.textContent=t; 
+            btn.style.background=prevBg; 
+            btn.style.color=prevColor;
+            btn.style.fontWeight='';
+          }, 2000); 
+=======
+          btn.textContent='✓ Added'; 
+          const prevBg = btn.style.background; 
+          btn.style.background='#22c55e'; 
+          setTimeout(function(){ btn.textContent=t; btn.style.background=prevBg; }, 800); 
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        } 
+      }
+      function render(list){ 
+        if(!list.length){ 
+          grid.innerHTML=''; 
+          empty.style.display='block'; 
+          return; 
+        } 
+<<<<<<< HEAD
+        empty.style.display='none'; 
+        grid.innerHTML = list.map(function(i){
+          var imageHtml = '';
+          if(i.image_url && i.image_url.trim()){
+            imageHtml = '<img src="' + i.image_url + '" alt="' + (i.name || '') + '" style="width:100%;height:220px;object-fit:cover;border-radius:8px 8px 0 0;" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">';
+          }
+          var fallbackHtml = '<div class="menu-head" style="' + (i.image_url && i.image_url.trim() ? 'display:none;' : '') + '">' + (i.icon||'🍽️') + '</div>';
+          return '<div class="menu-card"><div style="position:relative;width:100%;height:220px;background:#f0f0f0;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:center;overflow:hidden">' + imageHtml + fallbackHtml + '</div><div style="padding:14px"><div style="font-weight:800;margin-top:6px">' + i.name + '</div><div style="color:#64748b;font-size:.85em;margin-top:2px">' + (i.category||'') + '</div><div class="menu-price" style="margin:6px 0">₹' + i.price + '</div><button id="btn_' + i.id + '" class="btn add-cart-btn" data-item-id="' + i.id + '">Add to Cart</button></div></div>';
+        }).join(''); 
+=======
+        empty.style.display='none';
+        grid.innerHTML = list.map(function(i){
+          var imgHtml = '';
+          if(i.image_url){
+            imgHtml = '<img src="' + i.image_url + '" alt="' + (i.name||'') + '" style="width:100%;height:220px;object-fit:cover;border-radius:12px 12px 0 0;display:block" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">';
+          }
+          var iconFallback = '<div class="menu-head" style="display:' + (i.image_url ? 'none' : 'flex') + '">' + (i.icon||'🍽️') + '</div>';
+          return '<div class="menu-card" style="overflow:hidden">' + imgHtml + iconFallback + '<div style="padding:14px"><div style="font-weight:800;margin-top:6px">' + i.name + '</div><div style="color:#64748b;font-size:.85em;margin-top:2px">' + (i.category||'') + '</div><div class="menu-price" style="margin:6px 0">₹' + i.price + '</div><button id="btn_' + i.id + '" class="btn add-cart-btn" data-item-id="' + i.id + '">Add to Cart</button></div></div>';
+        }).join('');
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        
+        grid.querySelectorAll('.add-cart-btn').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            const itemId = parseInt(this.dataset.itemId);
+            const item = all.find(function(x){ return x.id===itemId; });
+            if(item) addToCart(item);
+          });
+        });
+      }
+      function getFiltered(){ 
+        var q = (search.value||'').toLowerCase(); 
+        var filtered = all; 
+        if(currentCat!=='all'){ 
+          filtered = filtered.filter(function(i){ return (i.category||'').toLowerCase()===currentCat.toLowerCase(); }); 
+        } 
+        if(q){ 
+          filtered = filtered.filter(function(i){ return (i.name||'').toLowerCase().includes(q); }); 
+        } 
+        return filtered; 
+      }
+      function filterCat(cat){ 
+        currentCat=cat; 
+        document.querySelectorAll('#menuCategories button').forEach(function(b){ 
+          b.classList.remove('active'); 
+          if(b.dataset.cat===cat) b.classList.add('active'); 
+        }); 
+        render(getFiltered()); 
+      }
+      cats.addEventListener('click', function(e){
+        const btn = e.target.closest('.category-btn');
+        if(btn && btn.dataset.cat){
+          filterCat(btn.dataset.cat);
+        }
+      });
+      
+      // Function to load menu items
+      function loadMenuItems(){
+        fetch('/api/menu/today').then(function(r){ return r.json(); }).then(function(items){ 
+          all=Array.isArray(items)?items:[]; 
+          var cats_set = new Set(); 
+          all.forEach(function(i){ if(i.category) cats_set.add(i.category); }); 
+          cats.innerHTML = '<button class="btn ghost category-btn active" data-cat="all">All</button>' + Array.from(cats_set).map(function(c){ 
+            return '<button class="btn ghost category-btn" data-cat="' + c + '">' + c + '</button>'; 
+          }).join(''); 
+          render(getFiltered()); 
+        }).catch(function(e){ console.error('Error loading menu:', e); });
+      }
+      
+      // Function to load combos
+      function loadCombos(){
+        fetch('/api/combos').then(function(r){ return r.json(); }).then(function(combos){
+          var combosGrid = document.getElementById('combosGrid');
+          var combosEmpty = document.getElementById('combosEmpty');
+          if(!combosGrid || !combosEmpty) return;
+          
+          if(!Array.isArray(combos) || combos.length === 0){
+            combosGrid.innerHTML = '';
+            combosEmpty.style.display = 'block';
+            return;
+          }
+          combosEmpty.style.display = 'none';
+          
+          combosGrid.innerHTML = combos.map(function(combo){
+            var itemsList = '';
+            if(combo.items && combo.items.length > 0){
+              itemsList = '<div style="color:#64748b;font-size:.8em;margin-top:4px">Includes: ' + 
+                combo.items.map(function(item){ return item.icon + ' ' + item.name + ' (x' + (item.quantity||1) + ')'; }).join(', ') + 
+                '</div>';
+            }
+<<<<<<< HEAD
+            var imageHtml = '';
+            if(combo.image_url && String(combo.image_url).trim()){
+              imageHtml = '<img src="' + combo.image_url + '" alt="' + (combo.name||'') + '" style="width:100%;height:220px;object-fit:cover;border-radius:8px 8px 0 0;" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">';
+            }
+            var fallbackHtml = '<div class="menu-head" style="' + (combo.image_url && String(combo.image_url).trim() ? 'display:none;' : '') + '">' + (combo.icon||'🍱') + '</div>';
+            return '<div class="menu-card" style="border:2px solid #FF6B6B;position:relative">'
+              + '<div style="position:absolute;top:8px;right:8px;background:#FF6B6B;color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700">COMBO</div>'
+              + '<div style="position:relative;width:100%;height:220px;background:#f0f0f0;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:center;overflow:hidden">' + imageHtml + fallbackHtml + '</div>'
+              + '<div style="padding:14px">'
+              +   '<div style="font-weight:800;margin-top:6px">' + combo.name + '</div>'
+              +   '<div style="color:#64748b;font-size:.85em;margin-top:2px">' + (combo.description||'Special combo deal') + '</div>'
+              +   itemsList
+              +   '<div class="menu-price" style="margin:6px 0;color:#FF6B6B">₹' + combo.price + '</div>'
+              +   '<button id="combo_btn_' + combo.id + '" class="btn add-combo-btn" data-combo-id="' + combo.id + '" style="background:linear-gradient(135deg, #FF6B6B, #FFB347)">Add Combo</button>'
+              + '</div>'
+            + '</div>';
+=======
+            return '<div class="menu-card" style="border:2px solid #FF6B6B;position:relative"><div style="position:absolute;top:8px;right:8px;background:#FF6B6B;color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700">COMBO</div><div class="menu-head">' + (combo.icon||'🍱') + '</div><div style="padding:14px"><div style="font-weight:800;margin-top:6px">' + combo.name + '</div><div style="color:#64748b;font-size:.85em;margin-top:2px">' + (combo.description||'Special combo deal') + '</div>' + itemsList + '<div class="menu-price" style="margin:6px 0;color:#FF6B6B">₹' + combo.price + '</div><button id="combo_btn_' + combo.id + '" class="btn add-combo-btn" data-combo-id="' + combo.id + '" style="background:linear-gradient(135deg, #FF6B6B, #FFB347)">Add Combo</button></div></div>';
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+          }).join('');
+          
+          combosGrid.querySelectorAll('.add-combo-btn').forEach(function(btn){
+            btn.addEventListener('click', function(){
+              var comboId = parseInt(this.dataset.comboId);
+              var combo = combos.find(function(c){ return c.id === comboId; });
+              if(combo){
+                var cartItem = {
+                  id: 'combo_' + combo.id,
+                  name: combo.name,
+                  price: combo.price,
+                  icon: combo.icon || '🍱',
+                  quantity: 1,
+                  isCombo: true
+                };
+                addToCart(cartItem);
+              }
+            });
+          });
+        }).catch(function(e){ 
+          console.error('Error loading combos:', e); 
+          var combosEmpty = document.getElementById('combosEmpty');
+          if(combosEmpty) combosEmpty.style.display = 'none';
+        });
+      }
+      
+      // Initial load
+      loadCombos();
+      loadMenuItems();
+      
+      // Auto-refresh every 30 seconds for new combos and menu items
+      setInterval(function(){
+<<<<<<< HEAD
+=======
+        loadCombos();
+        loadMenuItems();
+      }, 30000); // 30 seconds
+      
+      // Auto-refresh page every 5 minutes (300000ms) to show latest menu updates
+      setInterval(function(){
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        if(document.visibilityState === 'visible'){
+          loadCombos();
+          loadMenuItems();
+        }
+<<<<<<< HEAD
+      }, 30000); // 30 seconds
+      
+      // Full refresh every 5 minutes when page is visible
+      setInterval(function(){
+        if(document.visibilityState === 'visible'){
+          location.reload();
+        }
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+      }, 300000); // 5 minutes
+      
+      search.addEventListener('input', function(){ render(getFiltered()); });
+    })();
+    </script>
+</div>
+{% endblock %}

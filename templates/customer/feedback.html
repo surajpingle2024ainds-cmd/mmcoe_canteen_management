@@ -1,0 +1,165 @@
+{% extends 'base_customer.html' %}
+{% block title %}Feedback{% endblock %}
+{% block content %}
+<div class="card">
+  <h2 class="section-title">💬 Feedback</h2>
+  
+  <!-- Submit Feedback Section -->
+  <div style="background:linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);border:2px solid #DBEAFE;border-radius:12px;padding:20px;margin-bottom:24px;">
+    <h3 style="color:#1E40AF;margin-bottom:16px;font-size:1.2em;font-weight:800;">📝 Share Your Feedback</h3>
+    <div id="fbAlert" style="margin-bottom:12px;padding:10px;border-radius:8px;display:none;"></div>
+    
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-weight:700;margin-bottom:6px;color:#475569;">Category</label>
+      <select id="fbCategory" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:white;">
+        <option value="general">💬 General</option>
+        <option value="food">🍽️ Food Quality</option>
+        <option value="service">⚡ Service</option>
+        <option value="pricing">💰 Pricing</option>
+        <option value="suggestions">💡 Suggestions</option>
+        <option value="complaint">⚠️ Complaint</option>
+      </select>
+    </div>
+    
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-weight:700;margin-bottom:6px;color:#475569;">Rating (optional)</label>
+      <select id="fbRating" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:white">
+        <option value="">Select Rating</option>
+        <option value="5">★★★★★ Excellent</option>
+        <option value="4">★★★★☆ Good</option>
+        <option value="3">★★★☆☆ Average</option>
+        <option value="2">★★☆☆☆ Poor</option>
+        <option value="1">★☆☆☆☆ Bad</option>
+      </select>
+    </div>
+    
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-weight:700;margin-bottom:6px;color:#475569;">Your Feedback</label>
+      <textarea id="fbText" rows="5" placeholder="Share your experience, suggestions, or concerns..." style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;resize:vertical;background:white"></textarea>
+      <div style="font-size:12px;color:#64748b;margin-top:4px;">Minimum 10 characters required</div>
+    </div>
+    
+    <button id="submitFeedbackBtn" class="btn" style="width:100%;padding:12px;font-size:1.1em;">Submit Feedback</button>
+  </div>
+  
+  <!-- My Feedback History -->
+  <div style="background:#fff;border:2px solid #e5e7eb;border-radius:12px;padding:20px;">
+    <h3 style="color:#1E40AF;margin-bottom:16px;font-size:1.2em;font-weight:800;">📋 My Feedback History</h3>
+    <div id="feedbackHistory" style="min-height:100px;">
+      <div style="text-align:center;padding:20px;color:#64748b;">Loading your feedback history...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const token = localStorage.getItem('authToken')||'';
+  
+  function showAlert(msg, isSuccess){
+    var el = document.getElementById('fbAlert');
+    el.style.display = 'block';
+    el.style.color = isSuccess ? '#155724' : '#721c24';
+    el.style.background = isSuccess ? '#d4edda' : '#f8d7da';
+    el.style.border = '1px solid ' + (isSuccess ? '#c3e6cb' : '#f5c6cb');
+    el.textContent = msg;
+    setTimeout(function(){ 
+      el.style.display = 'none'; 
+      el.textContent=''; 
+    }, 4000);
+  }
+  
+  function loadFeedbackHistory(){
+    if(!token) return;
+    
+    fetch('/api/feedback/my', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).then(function(r){ 
+      if(!r.ok){
+        throw new Error('Failed to load feedback history');
+      }
+      return r.json(); 
+    }).then(function(data){
+      var container = document.getElementById('feedbackHistory');
+      if(!data.success || !data.feedback || data.feedback.length === 0){
+        container.innerHTML = '<div style="text-align:center;padding:20px;color:#64748b;">📭 No feedback submitted yet. Be the first to share your experience!</div>';
+        return;
+      }
+      
+      container.innerHTML = data.feedback.map(function(fb){
+        var ratingStars = '';
+        if(fb.rating){
+          for(var i=1; i<=5; i++){
+            ratingStars += i <= fb.rating ? '★' : '☆';
+          }
+        }
+        var dateStr = fb.created_at ? new Date(fb.created_at).toLocaleString() : 'N/A';
+        return '<div style="background:#f8f9fa;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;"><div><strong style="color:#1e293b;">' + (fb.rating ? ratingStars + ' (' + fb.rating + '/5)' : 'No Rating') + '</strong></div><div style="font-size:12px;color:#64748b;">' + dateStr + '</div></div><div style="color:#475569;line-height:1.6;">' + (fb.message || '').replace(/\n/g, '<br>') + '</div></div>';
+      }).join('');
+    }).catch(function(e){
+      console.error('Error loading feedback:', e);
+      document.getElementById('feedbackHistory').innerHTML = '<div style="text-align:center;padding:20px;color:#ef4444;">Failed to load feedback history.</div>';
+    });
+  }
+  
+  function submitFeedback(){
+    var message = (document.getElementById('fbText').value||'').trim();
+    var rating = (document.getElementById('fbRating').value||'').trim();
+    var category = document.getElementById('fbCategory').value || 'general';
+    
+    if(!message || message.length < 10){
+      showAlert('Please write at least 10 characters for your feedback.', false);
+      return;
+    }
+    
+    if(!token){
+      showAlert('Please login to submit feedback.', false);
+      return;
+    }
+    
+    const submitBtn = document.getElementById('submitFeedbackBtn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+    
+    fetch('/api/feedback',{ 
+      method:'POST', 
+      headers:{ 'Content-Type':'application/json', 'Authorization': 'Bearer ' + token }, 
+      body: JSON.stringify({ message: message, rating: rating ? Number(rating) : undefined, category: category }) 
+    }).then(function(r){ 
+      return r.json().then(function(j){
+        if(!r.ok) {
+          throw new Error(j.error || 'Failed to submit feedback');
+        }
+        document.getElementById('fbText').value=''; 
+        document.getElementById('fbRating').value='';
+        document.getElementById('fbCategory').value='general';
+        showAlert('✅ Thank you for your feedback! We appreciate your input.', true);
+        // Reload feedback history
+        setTimeout(function(){ loadFeedbackHistory(); }, 500);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Feedback';
+      });
+    }).catch(function(e){ 
+      showAlert(e.message || 'Failed to submit feedback. Please try again.', false);
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Feedback';
+    });
+  }
+  
+  document.getElementById('submitFeedbackBtn').addEventListener('click', submitFeedback);
+  
+  // Allow Enter key to submit (but not Shift+Enter)
+  document.getElementById('fbText').addEventListener('keydown', function(e){
+    if(e.key === 'Enter' && e.shiftKey === false && e.ctrlKey === false){
+      e.preventDefault();
+      submitFeedback();
+    }
+  });
+  
+  // Load feedback history on page load
+  loadFeedbackHistory();
+  
+  // Auto-refresh feedback history every 60 seconds
+  setInterval(loadFeedbackHistory, 60000);
+})();
+</script>
+{% endblock %}

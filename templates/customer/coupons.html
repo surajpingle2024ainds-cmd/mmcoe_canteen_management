@@ -1,0 +1,42 @@
+{% extends 'base_customer.html' %}
+{% block title %}My Coupons{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">🎫 My Coupons</h2>
+    <div id="couponRoot">Loading...</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+    (function(){
+      const root = document.getElementById('couponRoot');
+      function getCoupons(){ try{ return JSON.parse(localStorage.getItem('coupons')||'[]').filter(function(c){ return !c.expired; }); }catch(_){ return []; } }
+      function delCoupon(id){ 
+        let cs = JSON.parse(localStorage.getItem('coupons')||'[]'); 
+        cs = cs.filter(function(x){ return String(x.id)!==String(id); }); 
+        localStorage.setItem('coupons', JSON.stringify(cs)); 
+        location.reload(); 
+      }
+      const list = getCoupons();
+      if(list.length===0){ root.innerHTML = '<div class="muted">No active coupons.</div>'; return; }
+      root.innerHTML = list.map(function(c){
+        return '<div class="stat-card" style="padding:16px"><div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:800">Order #' + c.orderId + '</div><button class="btn ghost del-coupon-btn" data-coupon-id="' + c.id + '">Remove</button></div><div id="qr_' + c.id + '" class="protected-content" style="background:white;padding:12px;border-radius:10px;margin-top:10px;display:inline-block"></div></div>';
+      }).join('');
+      
+      root.querySelectorAll('.del-coupon-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          const id = this.dataset.couponId;
+          delCoupon(id);
+        });
+      });
+      
+      setTimeout(function(){
+        list.forEach(function(c){ 
+          const el=document.getElementById('qr_'+c.id); 
+          if(el){ 
+            new QRCode(el,{ text: c.qrData, width: 160, height: 160 }); 
+          } 
+        }); 
+      }, 50);
+    })();
+    </script>
+</div>
+{% endblock %}

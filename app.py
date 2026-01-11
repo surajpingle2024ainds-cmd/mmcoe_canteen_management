@@ -1,0 +1,2958 @@
+from flask import Flask, request, jsonify, send_file, render_template_string, Blueprint, render_template, redirect
+from flask_cors import CORS
+from models import db, User, MenuItem, Order, OrderItem, Coupon, PromoCode, StaffMember, Settings, Inventory, Supplier, SystemSetting, Promotion, Combo, ComboItem, Offer, DailyOrderLog
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt
+from datetime import datetime, timedelta, date
+import csv
+import random
+import string
+import uuid
+from sqlalchemy import func, desc, and_, or_
+import os
+import json
+
+app = Flask(__name__)
+
+# FIXED: Complete CORS configuration for all environments
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",  # Allow all origins for development
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": False
+    }
+})
+
+# Configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///canteen.db'
+app.config['SECRET_KEY'] = 'mmcoe-secret-key-2025-super-secure'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db.init_app(app)
+
+# OTP storage (in-memory for demo - no email service required)
+otp_storage = {}
+demo_payments = {}
+
+
+
+# ==================== HELPER FUNCTIONS ====================
+
+<<<<<<< HEAD
+def generate_token(user_id, remember_me=False):
+    # If remember_me is True, token expires in 30 days, otherwise 7 days
+    days = 30 if remember_me else 7
+    payload = {
+        'user_id': user_id,
+        'exp': datetime.utcnow() + timedelta(days=days)
+=======
+def generate_token(user_id):
+    payload = {
+        'user_id': user_id,
+        'exp': datetime.utcnow() + timedelta(days=7)
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+    }
+    return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
+
+def verify_token(token):
+    try:
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        return payload['user_id']
+    except Exception as e:
+        print(f"Token verification failed: {e}")
+        return None
+
+def get_auth_user():
+    try:
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header:
+            print(f"[AUTH] No Authorization header found")
+            return None
+        
+        token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else auth_header
+        
+        if not token:
+            print(f"[AUTH] No token found in Authorization header")
+            return None
+        
+        print(f"[AUTH] Token extracted (first 20 chars): {token[:20]}...")
+        user_id = verify_token(token)
+        
+        if not user_id:
+            print(f"[AUTH] Token verification failed")
+            return None
+        
+        print(f"[AUTH] Token verified - User ID: {user_id}")
+        user = User.query.get(user_id)
+        
+        if not user:
+            print(f"[AUTH] User {user_id} not found in database")
+            return None
+        
+        print(f"[AUTH] ✅ User authenticated: {user.name} (ID: {user.id}, Role: {user.role})")
+        return user
+    except Exception as e:
+        print(f"[AUTH] Error in get_auth_user: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def generate_otp():
+    return ''.join(random.choices(string.digits, k=4))
+
+# ==================== ROUTES ====================
+
+@app.route('/', methods=['GET'])
+def home():
+    # Serve landing/login UI on root
+    return render_template('landing.html')
+
+@app.route('/api/auth/generate-otp', methods=['POST', 'OPTIONS'])
+def api_generate_otp():
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip()
+        name = data.get('name', 'User')
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        # Generate and store OTP
+        otp = generate_otp()
+        otp_storage[email] = {
+            'otp': otp,
+            'timestamp': datetime.utcnow(),
+            'name': name
+        }
+        
+        # Clean old OTPs (older than 10 minutes)
+        current_time = datetime.utcnow()
+        expired_emails = [
+            e for e, data in otp_storage.items()
+            if (current_time - data['timestamp']).total_seconds() > 600
+        ]
+        for e in expired_emails:
+            del otp_storage[e]
+        
+        print(f"\n✅ OTP GENERATED")
+        print(f"   Email: {email}")
+        print(f"   Name: {name}")
+        print(f"   OTP: {otp}")
+        print(f"   Time: {current_time.strftime('%H:%M:%S')}\n")
+        
+        return jsonify({
+            'success': True,
+            'message': f'OTP sent successfully to {email}',
+            'otp': otp,  # In production, remove this and send via email
+            'note': 'For demo: OTP is shown here. In production, it will be sent via email.'
+        }), 200
+        
+    except Exception as e:
+        print(f"OTP Generation Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== NEW MODELS (ADD-ONLY) ====================
+
+# Additive fields to Order and User (nullable to preserve existing data)
+if not hasattr(Order, 'kitchen_status'):
+    Order.kitchen_status = db.Column(db.String(20), default='pending', nullable=True)
+if not hasattr(Order, 'preparation_started_at'):
+    Order.preparation_started_at = db.Column(db.DateTime, nullable=True)
+if not hasattr(Order, 'preparation_completed_at'):
+    Order.preparation_completed_at = db.Column(db.DateTime, nullable=True)
+if not hasattr(Order, 'kitchen_notes'):
+    Order.kitchen_notes = db.Column(db.String(500), nullable=True)
+
+if not hasattr(User, 'is_vip'):
+    User.is_vip = db.Column(db.Boolean, default=False, nullable=True)
+if not hasattr(User, 'is_blocked'):
+    User.is_blocked = db.Column(db.Boolean, default=False, nullable=True)
+if not hasattr(User, 'referred_by'):
+    User.referred_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+# === NEW FEATURE: ADMIN PORTAL ADVANCED ===
+admin_advanced_bp = Blueprint('admin_advanced', __name__, template_folder='templates')
+
+@app.route('/admin-advanced', methods=['GET'])
+def admin_advanced():
+    return render_template('admin_advanced.html')
+
+# Add to User model: is_vip, is_blocked fields ONLY IF NOT EXIST
+if not hasattr(User, 'is_vip'):
+    User.is_vip = db.Column(db.Boolean, default=False)
+if not hasattr(User, 'is_blocked'):
+    User.is_blocked = db.Column(db.Boolean, default=False)
+# Add to Staff/Employee model as needed
+
+@app.route('/api/auth/signup', methods=['POST', 'OPTIONS'])
+def signup():
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        data = request.get_json()
+        
+        # Validation
+        required = ['name', 'email', 'phone', 'college_id', 'password']
+        missing = [f for f in required if not data.get(f)]
+        
+        if missing:
+            return jsonify({'error': f'Missing fields: {", ".join(missing)}'}), 400
+        
+        # Verify OTP
+        email = data.get('email', '').strip().lower()
+        otp = data.get('otp', '').strip()
+        
+        if not otp:
+            return jsonify({'error': 'OTP is required'}), 400
+        
+        # Check if OTP exists for this email
+        if email not in otp_storage:
+            return jsonify({'error': 'OTP not found. Please request a new OTP'}), 400
+        
+        stored_otp_data = otp_storage[email]
+        stored_otp = stored_otp_data['otp']
+        
+        # Check if OTP is expired (10 minutes)
+        if (datetime.utcnow() - stored_otp_data['timestamp']).total_seconds() > 600:
+            del otp_storage[email]
+            return jsonify({'error': 'OTP expired. Please request a new OTP'}), 400
+        
+        # Verify OTP matches
+        if otp != str(stored_otp):
+            return jsonify({'error': 'Invalid OTP'}), 400
+        
+        # OTP verified, remove it from storage
+        del otp_storage[email]
+        
+        # Check existing user
+        if User.query.filter_by(email=email).first():
+            return jsonify({'error': 'Email already registered'}), 400
+        
+        if User.query.filter_by(college_id=data['college_id']).first():
+            return jsonify({'error': 'College ID already registered'}), 400
+        
+        # Determine role based on college_id
+        college_id_lower = data['college_id'].lower()
+        if 'owner' in college_id_lower or 'admin' in college_id_lower:
+            role = 'owner'
+        elif 'kitchen' in college_id_lower or 'staff' in college_id_lower:
+            role = 'kitchen'
+        else:
+            role = 'customer'
+        
+        # Create user
+        user = User(
+            name=data['name'].strip(),
+            email=email,  # Use normalized email from OTP verification
+            phone=data['phone'].strip(),
+            college_id=data['college_id'].strip(),
+            password=generate_password_hash(data['password']),
+            role=role,
+            department=data.get('department', '').strip(),
+            year=data.get('year', '').strip(),
+            address=data.get('address', '').strip()
+        )
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        token = generate_token(user.id)
+        
+        print(f"\n✅ NEW USER REGISTERED")
+        print(f"   Name: {user.name}")
+        print(f"   Email: {user.email}")
+        print(f"   Role: {user.role}\n")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Signup successful',
+            'token': token,
+            'user': {
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'role': user.role,
+                'phone': user.phone,
+                'college_id': user.college_id,
+                'department': user.department,
+                'year': user.year,
+                'address': user.address
+            }
+        }), 201
+   
+
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Signup Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
+def login():
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        data = request.get_json()
+        
+        if not data.get('email') or not data.get('password'):
+            return jsonify({'error': 'Email and password are required'}), 400
+        
+        # Find user by email or college_id
+        user = User.query.filter(
+            (User.email == data['email'].strip().lower()) |
+            (User.college_id == data['email'].strip())
+        ).first()
+        
+        if not user:
+            return jsonify({'error': 'Invalid credentials'}), 401
+        
+        if not check_password_hash(user.password, data['password']):
+            return jsonify({'error': 'Invalid credentials'}), 401
+        
+<<<<<<< HEAD
+        # Check if user wants to stay logged in
+        remember_me = bool(data.get('remember_me', False))
+        token = generate_token(user.id, remember_me=remember_me)
+=======
+        token = generate_token(user.id)
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        
+        print(f"\n✅ USER LOGIN")
+        print(f"   Name: {user.name}")
+        print(f"   Role: {user.role}\n")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Login successful',
+            'token': token,
+            'user': {
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'role': user.role,
+                'phone': user.phone,
+                'college_id': user.college_id,
+                'department': user.department,
+                'year': user.year,
+                'address': user.address
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Login Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/menu/all', methods=['GET', 'OPTIONS'])
+def get_all_menu():
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        items = MenuItem.query.all()
+        return jsonify([{
+            'id': item.id,
+            'name': item.name,
+            'icon': item.icon,
+            'price': item.price,
+            'desc': item.description,
+            'category': item.category,
+            'available': item.available,
+            'tags': item.tags,
+<<<<<<< HEAD
+            'image_url': item.image_url or ''
+=======
+            'image_url': item.image_url if hasattr(item, 'image_url') else None
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        } for item in items]), 200
+    except Exception as e:
+        print(f"Menu Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/menu/today', methods=['GET', 'OPTIONS'])
+def get_today_menu():
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        items = MenuItem.query.filter_by(available=True).all()
+        
+        # Check for active offer
+        active_offer = Offer.query.filter(
+            Offer.is_active == True,
+            Offer.start_date <= datetime.utcnow(),
+            or_(Offer.end_date.is_(None), Offer.end_date >= datetime.utcnow())
+        ).order_by(Offer.created_at.desc()).first()
+        
+        discount_percent = 0
+        if active_offer:
+            discount_percent = active_offer.discount_percent
+        
+        result = []
+        for item in items:
+            original_price = item.price
+            discounted_price = original_price
+            if discount_percent > 0:
+                discounted_price = original_price * (1 - discount_percent / 100)
+            
+            result.append({
+                'id': item.id,
+                'name': item.name,
+                'icon': item.icon,
+                'price': round(discounted_price, 2),
+                'original_price': original_price,
+                'discount_percent': discount_percent,
+                'desc': item.description,
+                'category': item.category,
+                'tags': item.tags,
+<<<<<<< HEAD
+                'image_url': item.image_url or ''
+=======
+                'image_url': item.image_url if hasattr(item, 'image_url') else None
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+            })
+        
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"Today Menu Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orders/create', methods=['POST', 'OPTIONS'])
+def create_order():
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        user = get_auth_user()
+        if not user:
+            return jsonify({'error': 'Unauthorized - Please login'}), 401
+        
+        data = request.get_json() or {}
+        if not data or (not data.get('items') and not data.get('combos')):
+            return jsonify({'error': 'Items or combos are required'}), 400
+        
+        # Generate unique order ID using timestamp + random suffix
+        import random
+        order_id = f"ORD{int(datetime.utcnow().timestamp())}{random.randint(100,999)}"
+        # Ensure uniqueness
+        while Order.query.filter_by(order_id=order_id).first():
+            order_id = f"ORD{int(datetime.utcnow().timestamp())}{random.randint(100,999)}"
+        
+<<<<<<< HEAD
+        # Calculate total from items and combos (respect active offer discounts and combos added as items)
+        calculated_total = 0.0
+        # Determine active offer discount percent (replicates logic from get_today_menu)
+        discount_percent = 0
+        try:
+            active_offer = Offer.query.filter(
+                Offer.is_active == True,
+                Offer.start_date <= datetime.utcnow(),
+                or_(Offer.end_date.is_(None), Offer.end_date >= datetime.utcnow())
+            ).order_by(Offer.created_at.desc()).first()
+            if active_offer:
+                discount_percent = active_offer.discount_percent or 0
+        except Exception:
+            discount_percent = 0
+
+        # Track combos inferred from items with ids like 'combo_<id>'
+        inferred_combos = []
+
+        # Add items total (apply offer discount); detect combos passed as items
+        for item in data.get('items', []):
+            item_id = item.get('id')
+            qty = int(item.get('quantity', 1))
+            # Detect combo items sent as 'combo_<id>' to avoid total becoming 0
+            if isinstance(item_id, str) and item_id.startswith('combo_'):
+                try:
+                    combo_id = int(item_id.split('_', 1)[1])
+                    combo = Combo.query.get(combo_id)
+                    if combo and combo.available:
+                        calculated_total += float(combo.price) * qty
+                        inferred_combos.append({'id': combo_id, 'quantity': qty})
+                except Exception:
+                    pass
+                continue
+            # Regular menu item path
+            menu_item = MenuItem.query.get(item_id)
+            if menu_item:
+                unit_price = float(menu_item.price)
+                if discount_percent and discount_percent > 0:
+                    unit_price = unit_price * (1 - float(discount_percent) / 100.0)
+                calculated_total += unit_price * qty
+
+        # Add combos total explicitly provided
+        for combo_data in data.get('combos', []):
+            combo = Combo.query.get(combo_data.get('id'))
+            if combo and combo.available:
+                calculated_total += float(combo.price) * int(combo_data.get('quantity', 1))
+=======
+        # Calculate total from items and combos
+        calculated_total = 0.0
+        # Add items total
+        for item in data.get('items', []):
+            menu_item = MenuItem.query.get(item['id'])
+            if menu_item:
+                calculated_total += menu_item.price * item.get('quantity', 1)
+        # Add combos total
+        for combo_data in data.get('combos', []):
+            combo = Combo.query.get(combo_data.get('id'))
+            if combo and combo.available:
+                calculated_total += combo.price * combo_data.get('quantity', 1)
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        
+        # Use provided total if it matches calculated (allows for discounts), otherwise use calculated
+        provided_total = float(data.get('total', 0))
+        if provided_total > 0 and abs(provided_total - calculated_total) < 0.01:
+            calculated_total = provided_total
+        
+<<<<<<< HEAD
+        # Handle wallet payment
+        payment_method = data.get('payment_method', 'online')
+        transaction_id = data.get('transaction_id', 'DEMO-TXN')
+        
+        if payment_method == 'wallet':
+            # Fetch fresh user data to get wallet balance
+            user = User.query.get(user.id)
+            wallet_balance = float(getattr(user, 'wallet_balance', 0.0) or 0.0)
+            
+            if wallet_balance < calculated_total:
+                return jsonify({'error': f'Insufficient wallet balance. Available: ₹{wallet_balance}, Required: ₹{calculated_total}'}), 400
+            
+            # Deduct from wallet
+            user.wallet_balance = wallet_balance - calculated_total
+            transaction_id = 'WALLET'
+            print(f"Payment via wallet: ₹{calculated_total} deducted. Remaining balance: ₹{user.wallet_balance}")
+        
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        order = Order(
+            order_id=order_id,
+            user_id=user.id,
+            customer_name=user.name,
+            customer_phone=user.phone,
+            total_amount=calculated_total,
+<<<<<<< HEAD
+            transaction_id=transaction_id,
+=======
+            transaction_id=data.get('transaction_id', 'DEMO-TXN'),
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+            status='pending'
+        )
+        
+        db.session.add(order)
+        db.session.flush()
+        
+        # Add order items (support both regular items and combos)
+        order_items_data = []
+        
+<<<<<<< HEAD
+        # Handle regular menu items (apply the same discount to captured unit price)
+        for item in data.get('items', []):
+            item_id = item.get('id')
+            qty = int(item.get('quantity', 1))
+            # Skip combos that were passed as items - handled below
+            if isinstance(item_id, str) and item_id.startswith('combo_'):
+                continue
+            menu_item = MenuItem.query.get(item_id)
+            if menu_item:
+                unit_price = float(menu_item.price)
+                if discount_percent and discount_percent > 0:
+                    unit_price = unit_price * (1 - float(discount_percent) / 100.0)
+                order_item = OrderItem(
+                    order_id=order.id,
+                    menu_item_id=menu_item.id,
+                    quantity=qty,
+                    price=unit_price
+=======
+        # Handle regular menu items
+        for item in data.get('items', []):
+            menu_item = MenuItem.query.get(item['id'])
+            if menu_item:
+                order_item = OrderItem(
+                    order_id=order.id,
+                    menu_item_id=menu_item.id,
+                    quantity=item['quantity'],
+                    price=menu_item.price
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+                )
+                db.session.add(order_item)
+                order_items_data.append({
+                    'id': menu_item.id,
+                    'name': menu_item.name,
+                    'icon': menu_item.icon,
+<<<<<<< HEAD
+                    'quantity': qty,
+                    'price': unit_price
+                })
+        
+        # Handle combo items (from explicit combos + inferred combos from items)
+        effective_combos = list(data.get('combos', [])) + inferred_combos
+        for combo_data in effective_combos:
+=======
+                    'quantity': item['quantity'],
+                    'price': menu_item.price
+                })
+        
+        # Handle combo items
+        for combo_data in data.get('combos', []):
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+            combo = Combo.query.get(combo_data.get('id'))
+            if combo and combo.available:
+                # Add combo items to order
+                for combo_item in combo.items:
+                    menu_item = combo_item.menu_item
+                    if menu_item:
+                        order_item = OrderItem(
+                            order_id=order.id,
+                            menu_item_id=menu_item.id,
+<<<<<<< HEAD
+                            quantity=combo_item.quantity * int(combo_data.get('quantity', 1)),
+=======
+                            quantity=combo_item.quantity * combo_data.get('quantity', 1),
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+                            price=menu_item.price
+                        )
+                        db.session.add(order_item)
+                        order_items_data.append({
+                            'id': menu_item.id,
+                            'name': menu_item.name,
+                            'icon': menu_item.icon,
+<<<<<<< HEAD
+                            'quantity': combo_item.quantity * int(combo_data.get('quantity', 1)),
+=======
+                            'quantity': combo_item.quantity * combo_data.get('quantity', 1),
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+                            'price': menu_item.price
+                        })
+        
+        # Create coupon
+        coupon_id = f"COUP{int(datetime.utcnow().timestamp())}"
+        qr_data = f'{{"orderId":"{order_id}","amount":{calculated_total},"status":"pending","time":"{datetime.utcnow().isoformat()}"}}'
+        
+        coupon = Coupon(
+            coupon_id=coupon_id,
+            order_id=order.id,
+            qr_data=qr_data,
+            status='pending'
+        )
+        db.session.add(coupon)
+        
+        # Log to DailyOrderLog
+        try:
+            order_date = datetime.utcnow().date()
+            order_time = datetime.utcnow()
+<<<<<<< HEAD
+            # Determine payment method
+            if transaction_id == 'WALLET':
+                payment_method = 'wallet'
+            elif transaction_id == 'CASH':
+                payment_method = 'cash'
+            else:
+                payment_method = 'online'
+=======
+            payment_method = 'online' if data.get('transaction_id') and data.get('transaction_id') != 'CASH' else 'cash'
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+            
+            daily_log = DailyOrderLog(
+                order_id=order_id,
+                order_db_id=order.id,
+                user_id=user.id,
+                customer_name=user.name,
+                customer_phone=user.phone,
+                customer_email=user.email,
+                order_date=order_date,
+                order_time=order_time,
+                total_amount=order.total_amount,
+                transaction_id=data.get('transaction_id', ''),
+                payment_method=payment_method,
+                status='pending',
+                items_json=json.dumps(order_items_data)
+            )
+            db.session.add(daily_log)
+        except Exception as e:
+            print(f"Error creating daily log: {e}")
+        
+        db.session.commit()
+
+        # Export CSV snapshots
+        export_csv()
+        
+        print(f"\n✅ ORDER CREATED")
+        print(f"   Order ID: {order_id}")
+        print(f"   Customer: {user.name}")
+        print(f"   Amount: ₹{data.get('total')}\n")
+        
+        return jsonify({
+            'success': True,
+            'order_id': order_id,
+            'coupon_id': coupon_id,
+            'qr_data': qr_data
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Order Creation Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orders/analytics', methods=['GET', 'OPTIONS'])
+def get_order_analytics():
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        selected_date = request.args.get('date', date.today().isoformat())
+        target_date = datetime.strptime(selected_date, '%Y-%m-%d').date()
+        
+        top_items = db.session.query(
+            MenuItem.name,
+            MenuItem.icon,
+            func.sum(OrderItem.quantity).label('total_quantity'),
+            func.sum(OrderItem.quantity * OrderItem.price).label('total_revenue')
+        ).join(OrderItem).join(Order).filter(
+            func.date(Order.created_at) == target_date
+        ).group_by(MenuItem.id).order_by(desc('total_quantity')).limit(10).all()
+        
+        return jsonify([{
+            'name': item.name,
+            'icon': item.icon,
+            'quantity': int(item.total_quantity),
+            'revenue': float(item.total_revenue)
+        } for item in top_items]), 200
+        
+    except Exception as e:
+        print(f"Analytics Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== DEMO PAYMENT PAGES ====================
+
+@app.route('/demo/create-payment', methods=['POST'])
+def demo_create_payment():
+    """Create a payment session"""
+    try:
+        data = request.get_json() or {}
+        amount = float(data.get('amount', 0))
+        note = str(data.get('note', 'MMCOE Order'))
+        
+        if amount <= 0:
+            return jsonify({'error': 'Invalid amount'}), 400
+        
+        # Generate unique token using UUID
+        token = str(uuid.uuid4())
+        
+        # Store payment session
+        demo_payments[token] = {
+            'token': token,
+            'amount': amount,
+            'note': note,
+            'status': 'pending',  # IMPORTANT: Initial status
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat(),
+            'paid_at': None,
+            'transaction_ref': f"TXN-{random.randint(100000,999999)}"
+        }
+        
+        # Use relative URLs to avoid domain mismatch issues (ngrok vs localhost)
+        base = request.host_url.rstrip('/')
+        # For QR code, we need absolute URL, but for link clicking, relative works better
+        pay_url_absolute = f"{base}/demo/pay/{token}"
+        pay_url_relative = f"/demo/pay/{token}"
+        status_url = f"/demo/pay/{token}/status"
+        
+        print(f"[PAYMENT] Created: {token} - Amount: {amount} - Status: pending")
+        print(f"[PAYMENT] Pay URL (absolute): {pay_url_absolute}")
+        print(f"[PAYMENT] Pay URL (relative): {pay_url_relative}")
+        print(f"[PAYMENT] Status URL: {status_url}")
+        print(f"[PAYMENT] Stored in demo_payments dict (total: {len(demo_payments)})")
+        
+        return jsonify({
+            'success': True,
+            'token': token,
+            'amount': amount,
+            'pay_url': pay_url_absolute,  # Absolute for QR code
+            'pay_url_relative': pay_url_relative,  # Relative for direct links
+            'status_url': status_url
+        }), 201
+    except Exception as e:
+        print(f"[PAYMENT] Error creating payment: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/demo/pay/<token>', methods=['GET'])
+def demo_pay_page(token):
+    """Payment page where user clicks 'Pay Now'"""
+    # Debug: Log token lookup attempt
+    print(f"[PAYMENT PAGE] Looking up token: {token}")
+    print(f"[PAYMENT PAGE] Available tokens: {list(demo_payments.keys())[:5]}")  # Show first 5 tokens
+    print(f"[PAYMENT PAGE] Total payments in storage: {len(demo_payments)}")
+    
+    # Try to find the token (handle URL encoding)
+    info = demo_payments.get(token)
+    
+    # If not found, try URL-decoded version
+    if not info:
+        try:
+            from urllib.parse import unquote
+            decoded_token = unquote(token)
+            if decoded_token != token:
+                print(f"[PAYMENT PAGE] Trying decoded token: {decoded_token}")
+                info = demo_payments.get(decoded_token)
+                if info:
+                    token = decoded_token  # Use decoded token for rest of function
+        except:
+            pass
+    
+    if not info:
+        print(f"[PAYMENT PAGE] ❌ Token not found: {token}")
+        # Show available tokens for debugging (first 100 chars)
+        debug_info = f"<p>Token searched: <code>{token}</code></p><p>Available tokens: {len(demo_payments)}</p>"
+        return (f"""
+<!DOCTYPE html><html><head><meta charset='utf-8'><title>Payment</title>
+<style>body{{font-family:Segoe UI,Tahoma,Arial;margin:40px;color:#2C3E50}}
+code{{background:#f0f0f0;padding:2px 6px;border-radius:4px;font-family:monospace}}</style></head><body>
+<h2>Invalid Payment Link</h2>
+<p>This payment session does not exist or has expired.</p>
+{debug_info}
+<p><a href="/app">← Back to App</a></p>
+</body></html>
+        """), 404
+    
+    paid = info['status'] == 'paid'
+    amount = info['amount']
+    note = info['note']
+    
+    return f'''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payment Page - MMCOE</title>
+<style>
+        body {{
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }}
+        .payment-card {{
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }}
+        h1 {{ color: #2C3E50; margin-bottom: 20px; }}
+        .amount {{
+            font-size: 3em;
+            color: #FF6B6B;
+            font-weight: 800;
+            margin: 20px 0;
+        }}
+        .btn {{
+            background: linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%);
+            color: white;
+            padding: 16px 40px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.2em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px;
+            width: 100%;
+        }}
+        .btn:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 107, 107, 0.4);
+        }}
+        .btn:disabled {{
+            opacity: 0.5;
+            cursor: not-allowed;
+        }}
+        .btn-cancel {{
+            background: #6B7280;
+            margin-top: 10px;
+        }}
+        .status {{
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 600;
+        }}
+        .status.success {{
+            background: #D1FAE5;
+            color: #065F46;
+        }}
+        .status.error {{
+            background: #FEE2E2;
+            color: #991B1B;
+        }}
+        .info {{
+            color: #6B7280;
+            margin: 15px 0;
+            font-size: 0.9em;
+        }}
+    </style>
+</head>
+<body>
+    <div class="payment-card">
+        <h1>💳 Payment Demo</h1>
+        <div class="amount">₹{amount}</div>
+        <div class="info">{note}</div>
+        
+        <button id="payBtn" class="btn" onclick="processPayment()" {'disabled' if paid else ''}>
+            {'✓ Paid' if paid else 'Pay Now'}
+        </button>
+        
+        <button class="btn btn-cancel" onclick="window.close()">
+            Cancel
+        </button>
+        
+        <div id="status" class="status" style="display:none;"></div>
+        
+        <div class="info" style="margin-top: 20px;">
+            This is a demo payment page.<br>
+            Click "Pay Now" to simulate successful payment.
+  </div>
+    </div>
+    
+<script>
+        const token = '{token}';
+        const statusDiv = document.getElementById('status');
+        const payBtn = document.getElementById('payBtn');
+        
+        async function processPayment() {{
+            payBtn.disabled = true;
+            payBtn.textContent = 'Processing...';
+            
+            try {{
+                const response = await fetch('/demo/pay/' + token + '/confirm', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }}
+                }});
+                
+                const result = await response.json();
+                
+                if (result.success) {{
+                    statusDiv.className = 'status success';
+                    statusDiv.innerHTML = '✅ Payment Successful!';
+                    statusDiv.style.display = 'block';
+                    payBtn.textContent = '✓ Paid';
+                    
+                    // Notify parent window
+                    if (window.opener) {{
+                        console.log('[PAYMENT PAGE] Notifying parent window');
+    window.opener.postMessage({{
+      type: 'payment_completed',
+      token: token
+    }}, '*');
+  }}
+  
+                    // Auto-close after 2 seconds
+                    setTimeout(function() {{
+                        window.close();
+                    }}, 2000);
+                }} else {{
+                    throw new Error(result.error || 'Payment failed');
+                }}
+            }} catch (error) {{
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ ' + error.message;
+                statusDiv.style.display = 'block';
+                payBtn.disabled = false;
+                payBtn.textContent = 'Try Again';
+            }}
+        }}
+        
+        // Check if already paid on page load
+    fetch('/demo/pay/' + token + '/status')
+            .then(r => r.json())
+            .then(data => {{
+                if (data.status === 'paid') {{
+                    statusDiv.className = 'status success';
+                    statusDiv.innerHTML = '✅ Already Paid';
+                    statusDiv.style.display = 'block';
+                    payBtn.disabled = true;
+                    payBtn.textContent = '✓ Paid';
+                    
+                    // Notify parent window if already paid
+                    if (window.opener) {{
+            window.opener.postMessage({{
+              type: 'payment_completed',
+              token: token
+            }}, '*');
+          }}
+        }}
+      }})
+            .catch(e => console.error('Status check error:', e));
+        
+        // Periodic status check for payment done via QR scanner
+        var statusCheckInterval = null;
+        function checkStatus() {{
+            fetch('/demo/pay/' + token + '/status')
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.status === 'paid') {{
+                        statusDiv.className = 'status success';
+                        statusDiv.innerHTML = '✅ Payment Successful!';
+                        statusDiv.style.display = 'block';
+                        payBtn.disabled = true;
+                        payBtn.textContent = '✓ Paid';
+                        
+                        // Clear interval once paid
+                        if (statusCheckInterval) {{
+                            clearInterval(statusCheckInterval);
+                            statusCheckInterval = null;
+                        }}
+                        
+                        // Notify parent window
+                        if (window.opener) {{
+                            window.opener.postMessage({{
+                                type: 'payment_completed',
+                                token: token
+                            }}, '*');
+                        }}
+                    }}
+                }})
+                .catch(e => console.error('Status check error:', e));
+        }}
+        
+        // Check status every 2 seconds if not already paid
+        {'' if paid else 'statusCheckInterval = setInterval(checkStatus, 2000);'}
+        window.addEventListener('focus', function() {{
+            if (!payBtn.disabled) {{
+                checkStatus();
+            }}
+        }});
+</script>
+</body>
+</html>
+    '''
+
+@app.route('/demo/pay/<token>/confirm', methods=['POST'])
+def demo_pay_confirm(token):
+    """Confirm payment (user clicked 'Pay Now')"""
+    info = demo_payments.get(token)
+    if not info:
+        return jsonify({'error': 'Invalid token'}), 404
+    
+    # Update payment status
+        info['status'] = 'paid'
+        info['paid_at'] = datetime.utcnow().isoformat()
+    info['updated_at'] = datetime.utcnow().isoformat()
+    
+    print(f"[PAYMENT] Confirmed: {token} - Status: PAID")
+    
+    return jsonify({
+        'success': True,
+        'status': 'paid',
+        'token': token
+    })
+
+@app.route('/demo/pay/<token>/status', methods=['GET', 'OPTIONS'])
+def demo_pay_status(token):
+    """Check payment status - THIS IS THE KEY ENDPOINT FOR CROSS-DEVICE PAYMENT DETECTION"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    print(f"[PAYMENT STATUS] Checking token: {token}")
+    
+    info = demo_payments.get(token)
+    if not info:
+        print(f"[PAYMENT STATUS] Token not found: {token}")
+        return jsonify({'error': 'Invalid token'}), 404
+    
+    status = info.get('status', 'pending')
+    
+    print(f"[PAYMENT STATUS] Token: {token} - Status: {status}")
+    
+    # CRITICAL: Return exact format expected by frontend
+    response = jsonify({
+        'status': status,  # 'pending' or 'paid'
+        'token': token,
+        'amount': info.get('amount', 0),
+        'created_at': info.get('created_at'),
+        'updated_at': info.get('updated_at'),
+        'paid_at': info.get('paid_at')  # Include paid timestamp if available
+    })
+    
+    # IMPORTANT: Add no-cache headers to ensure real-time status
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    
+    return response
+
+# Serve the SPA front-end directly from this Flask app to keep links consistent
+@app.route('/app', methods=['GET'])
+def serve_landing_html():
+    try:
+        return render_template('landing.html')
+    except Exception as e:
+        return f"Front-end not found: {e}", 404
+
+# ==================== AUTH PAGES (SEPARATE) ====================
+@app.route('/login/customer', methods=['GET'])
+def login_customer_page():
+    return render_template('auth/customer_login.html')
+
+@app.route('/register/customer', methods=['GET'])
+def register_customer_page():
+    return render_template('auth/customer_register.html')
+
+@app.route('/login/kitchen', methods=['GET'])
+def login_kitchen_page():
+    return render_template('auth/kitchen_login.html')
+
+@app.route('/register/kitchen', methods=['GET'])
+def register_kitchen_page():
+    return render_template('auth/kitchen_register.html')
+
+@app.route('/logout', methods=['GET'])
+def logout_page():
+    # Redirect to main app landing; client should clear session storage before navigating
+    return redirect('/app')
+
+<<<<<<< HEAD
+=======
+# ==================== IMAGE UPLOAD ====================
+UPLOAD_FOLDER = 'static/images/menu'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/api/upload/image', methods=['POST', 'OPTIONS'])
+def upload_image():
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if file and allowed_file(file.filename):
+            # Create upload directory if it doesn't exist
+            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+            
+            # Generate unique filename
+            filename = str(uuid.uuid4()) + '.' + file.filename.rsplit('.', 1)[1].lower()
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+            
+            # Return URL path
+            image_url = f'/static/images/menu/{filename}'
+            return jsonify({
+                'success': True,
+                'image_url': image_url
+            }), 200
+        else:
+            return jsonify({'error': 'Invalid file type'}), 400
+            
+    except Exception as e:
+        print(f"Upload Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+# ==================== HEALTH ENDPOINTS ====================
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'ok': True, 'time': datetime.utcnow().isoformat()}), 200
+
+@app.route('/health/routes', methods=['GET'])
+def health_routes():
+    routes = [
+        {'rule': str(r.rule), 'methods': list(r.methods), 'endpoint': r.endpoint}
+        for r in app.url_map.iter_rules()
+        if not r.rule.startswith('/static')
+    ]
+    return jsonify(routes), 200
+
+# ==================== MULTI-PAGE ROUTES (NAV ITEMS) ====================
+# Customer pages
+@app.route('/customer/browse-menu')
+def page_customer_browse_menu():
+    return render_template('customer/browse_menu.html')
+
+@app.route('/customer/cart')
+def page_customer_cart():
+    return render_template('customer/cart.html')
+
+@app.route('/customer/orders')
+def page_customer_orders():
+    return render_template('customer/orders.html')
+
+@app.route('/customer/coupons')
+def page_customer_coupons():
+    return render_template('customer/coupons.html')
+
+@app.route('/customer/history')
+def page_customer_history():
+    return render_template('customer/history.html')
+
+@app.route('/customer/profile')
+def page_customer_profile():
+    return render_template('customer/profile.html')
+
+@app.route('/customer/feedback')
+def page_customer_feedback():
+    return render_template('customer/feedback.html')
+
+@app.route('/customer/advanced-features')
+def page_customer_advanced_features():
+    return render_template('customer/advanced_features.html')
+
+# Owner pages
+@app.route('/owner/dashboard')
+def page_owner_dashboard():
+    return render_template('owner/dashboard.html')
+
+@app.route('/owner/powerbi')
+def page_owner_powerbi():
+    return render_template('owner/powerbi.html')
+
+@app.route('/owner/top-dishes')
+def page_owner_top_dishes():
+    return render_template('owner/top_dishes.html')
+
+@app.route('/owner/pending-orders')
+def page_owner_pending_orders():
+    return render_template('owner/pending_orders.html')
+
+@app.route('/owner/todays-menu')
+def page_owner_todays_menu():
+    return render_template('owner/todays_menu.html')
+
+@app.route('/owner/kitchen')
+def page_owner_kitchen():
+    return render_template('owner/kitchen.html')
+
+@app.route('/owner/feedback')
+def page_owner_feedback():
+    return render_template('owner/feedback.html')
+
+@app.route('/owner/cash-order')
+def page_owner_cash_order():
+    return render_template('owner/cash_order.html')
+
+@app.route('/owner/customer-segments')
+def page_owner_customer_segments():
+    return render_template('owner/customer_segments.html')
+
+@app.route('/owner/history')
+def page_owner_history():
+    return render_template('owner/history.html')
+
+@app.route('/owner/offers')
+def page_owner_offers():
+    return render_template('owner/offers.html')
+
+@app.route('/owner/combos')
+def page_owner_combos():
+    return render_template('owner/combos.html')
+
+@app.route('/owner/daily-orders')
+def page_owner_daily_orders():
+    return render_template('owner/daily_orders.html')
+
+# Kitchen pages
+@app.route('/kitchen/dashboard')
+def page_kitchen_dashboard():
+    return render_template('kitchen/dashboard.html')
+
+@app.route('/kitchen/orders')
+def page_kitchen_orders():
+    return render_template('kitchen/orders.html')
+
+@app.route('/kitchen/expire-coupons')
+def page_kitchen_expire_coupons():
+    return render_template('kitchen/expire_coupons.html')
+
+@app.route('/kitchen/history')
+def page_kitchen_history():
+    return render_template('kitchen/history.html')
+
+# ==================== ORDER SYNC ENDPOINTS ====================
+
+def serialize_order(order: Order):
+    try:
+        # Safely check for VIP status
+        vip = False
+        if order.user_id:
+            try:
+                user_obj = User.query.get(order.user_id)
+                if user_obj and hasattr(user_obj, 'is_vip'):
+                    vip = bool(user_obj.is_vip)
+            except Exception:
+                pass
+    except Exception:
+        vip = False
+    
+    # Handle customer name - for cash orders, use customer_name field
+    customer_name = order.customer_name or 'Walk-in Customer'
+    if order.user_id:
+        try:
+            user_obj = User.query.get(order.user_id)
+            if user_obj and user_obj.name:
+                customer_name = user_obj.name
+        except Exception:
+            pass
+    
+    # Safely serialize items
+    items_list = []
+    try:
+        for it in order.items:
+            if it and it.menu_item:
+                items_list.append({
+                    'id': it.menu_item_id,
+                    'name': it.menu_item.name or 'Unknown Item',
+                    'icon': it.menu_item.icon or '🍽️',
+                    'quantity': it.quantity,
+                    'price': it.price,
+                })
+    except Exception as e:
+        print(f"Error serializing order items for order {order.order_id}: {e}")
+        items_list = []
+    
+    return {
+        'id': order.order_id,
+        'order_id': order.order_id,  # Added for frontend compatibility
+        'db_id': order.id,
+        'total': order.total_amount,
+        'status': order.status,
+        'timestamp': order.created_at.isoformat() if order.created_at else None,
+        'created_at': order.created_at.isoformat() if order.created_at else None,  # Added for frontend
+        'customer_name': customer_name,  # Added for frontend
+        'transaction_id': order.transaction_id or '',  # Added for frontend
+        'is_vip': vip,
+        'kitchen_notes': order.kitchen_notes or '',
+        'items': items_list
+    }
+
+@app.route('/api/orders/my-orders', methods=['GET', 'OPTIONS'])
+def api_my_orders():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        orders = Order.query.filter_by(user_id=user.id).filter(Order.status != 'delivered').order_by(Order.created_at.desc()).all()
+        return jsonify([serialize_order(o) for o in orders]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orders/history', methods=['GET', 'OPTIONS'])
+def api_order_history():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        orders = Order.query.filter_by(user_id=user.id).order_by(Order.created_at.desc()).all()
+        return jsonify([serialize_order(o) for o in orders]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== GET PENDING ORDERS (OWNER OR KITCHEN) ====================
+@app.route('/api/orders/pending', methods=['GET', 'OPTIONS'])
+def get_pending_orders():
+    if request.method == 'OPTIONS':
+        return '', 204
+    user = get_auth_user()
+    if not user or user.role not in ['owner','kitchen']:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    pending = Order.query.filter_by(status='pending').order_by(Order.created_at.desc()).all()
+    result = []
+    for order in pending:
+        items = []
+        for item in order.items:
+            if item.menu_item:
+                items.append({
+                    'id': item.menu_item.id,
+                    'name': item.menu_item.name,
+                    'quantity': item.quantity,
+                    'price': item.price,
+                    'icon': item.menu_item.icon
+                })
+        # VIP flag for prioritization
+        vip = False
+        if order.user_id:
+            try:
+                user_obj = User.query.get(order.user_id)
+                if user_obj and hasattr(user_obj, 'is_vip'):
+                    vip = bool(user_obj.is_vip)
+            except Exception:
+                pass
+        result.append({
+            'id': order.id,
+            'order_id': order.order_id,
+            'customer_name': order.customer_name,
+            'customer_phone': order.customer_phone,
+            'items': items,
+            'total': order.total_amount,
+            'transaction_id': order.transaction_id,
+            'created_at': order.created_at.isoformat() if order.created_at else None,
+            'is_vip': vip
+        })
+    # Sort VIP first, then by created_at desc (already desc)
+    result.sort(key=lambda x: (not x.get('is_vip', False), ), reverse=False)
+    return jsonify(result), 200
+
+# ==================== OWNER: ACCEPT ORDER FEATURE ====================
+@app.route('/api/owner/orders/<int:order_id>/accept', methods=['PUT', 'OPTIONS'])
+def owner_accept_order(order_id):
+    """Owner accepts a pending order, changing its status to 'accepted' and allowing it to appear in kitchen queue."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        # Debug: Log incoming request headers
+        auth_header = request.headers.get('Authorization', '')
+        print(f"[ACCEPT ORDER] Authorization header: {auth_header[:50] if auth_header else 'NONE'}...")
+        print(f"[ACCEPT ORDER] Request method: {request.method}")
+        print(f"[ACCEPT ORDER] Request headers: {dict(request.headers)}")
+        
+        user = get_auth_user()
+        if not user:
+            print(f"[ACCEPT ORDER] ❌ No authenticated user - returning 401")
+            return jsonify({'error': 'Unauthorized - Please login. Token missing or invalid.'}), 401
+        
+        print(f"[ACCEPT ORDER] User authenticated: {user.name} (ID: {user.id}, Role: {user.role}, Email: {user.email})")
+        
+        if user.role != 'owner':
+            print(f"[ACCEPT ORDER] ❌ User {user.id} ({user.name}) has role '{user.role}' but needs 'owner'")
+            print(f"[ACCEPT ORDER] User details: email={user.email}, role={user.role}")
+            return jsonify({'error': f'Only owner can accept orders. Your role is: {user.role}'}), 403
+        
+        data = request.get_json() or {}
+        is_vip = bool(data.get('is_vip', False))
+        is_important = bool(data.get('is_important', False))
+        
+        print(f"[ACCEPT ORDER] Attempting to accept order ID: {order_id}")
+        order = Order.query.get(order_id)
+        
+        if not order:
+            print(f"[ACCEPT ORDER] Order {order_id} not found in database")
+            return jsonify({'error': f'Order {order_id} not found'}), 404
+        
+        print(f"[ACCEPT ORDER] Order {order_id} found - Current status: {order.status}")
+        
+        # Allow accepting if status is 'pending' (relax the check slightly)
+        if order.status != 'pending':
+            print(f"[ACCEPT ORDER] Order {order_id} is not pending (current: {order.status})")
+            # Still allow if already accepted (idempotent)
+            if order.status == 'accepted':
+                return jsonify({'success': True, 'order_id': order_id, 'message': 'Order already accepted'}), 200
+            return jsonify({'error': f'Order status is {order.status}, cannot accept'}), 400
+        
+        # Update order status
+        order.status = 'accepted'
+        print(f"[ACCEPT ORDER] Updated order {order_id} status to 'accepted'")
+        
+        # Set VIP if requested
+        if is_vip and order.user_id:
+            user_obj = User.query.get(order.user_id)
+            if user_obj:
+                if not hasattr(user_obj, 'is_vip') or not user_obj.is_vip:
+                    user_obj.is_vip = True
+                    print(f"[ACCEPT ORDER] Marked user {user_obj.id} as VIP")
+        
+        # Add important note if requested
+        if is_important:
+            if order.kitchen_notes:
+                if '[IMPORTANT]' not in order.kitchen_notes:
+                    order.kitchen_notes = order.kitchen_notes + ' [IMPORTANT]'
+            else:
+                order.kitchen_notes = '[IMPORTANT]'
+            print(f"[ACCEPT ORDER] Added IMPORTANT flag to order {order_id}")
+        
+        # Commit the order status change first
+        db.session.commit()
+        print(f"[ACCEPT ORDER] ✅ Order {order_id} accepted successfully")
+        
+        # Notify customer (separate try-catch to not affect main commit)
+        try:
+            from models import Notification
+            notification = Notification(user_id=order.user_id, message=f"Your order {order.order_id} was accepted.")
+            db.session.add(notification)
+            db.session.commit()
+            print(f"[ACCEPT ORDER] Notification sent to user {order.user_id}")
+        except Exception as e:
+            print(f"[ACCEPT ORDER] Failed to create notification: {e}")
+            # Don't rollback here - order is already accepted
+        
+        export_csv()
+        return jsonify({
+            'success': True, 
+            'order_id': order_id, 
+            'order_db_id': order.id,
+            'message': 'Order accepted and sent to kitchen queue'
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ACCEPT ORDER] ❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/orders/<int:order_id>/reject', methods=['PUT', 'OPTIONS'])
+def owner_reject_order(order_id):
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        order = Order.query.get(order_id)
+        if not order or order.status not in ['pending','accepted']:
+            return jsonify({'error': 'Order not found or cannot be rejected'}), 404
+<<<<<<< HEAD
+        
+        # If order was paid online (not CASH), add amount to customer's wallet
+        if order.user_id and order.transaction_id and order.transaction_id != 'CASH' and order.transaction_id != 'OFFLINE':
+            customer = User.query.get(order.user_id)
+            if customer:
+                # Add wallet_balance field if it doesn't exist
+                if not hasattr(customer, 'wallet_balance'):
+                    customer.wallet_balance = 0.0
+                customer.wallet_balance = (customer.wallet_balance or 0.0) + float(order.total_amount)
+                print(f"Added ₹{order.total_amount} to wallet for user {customer.id} (Order {order.order_id} rejected)")
+        
+        order.status = 'rejected'
+        db.session.commit()
+        
+        # Send notification to customer about refund
+        try:
+            from models import Notification
+            if order.user_id:
+                refund_msg = f"Your order {order.order_id} was rejected. "
+                if order.transaction_id and order.transaction_id != 'CASH':
+                    refund_msg += f"₹{order.total_amount} has been added to your wallet."
+                notification = Notification(user_id=order.user_id, message=refund_msg)
+                db.session.add(notification)
+                db.session.commit()
+        except Exception as e:
+            print(f"Failed to send notification: {e}")
+        
+=======
+        order.status = 'rejected'
+        db.session.commit()
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        export_csv()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/kitchen/orders/<int:order_id>/deliver', methods=['PUT', 'OPTIONS'])
+def kitchen_deliver_order(order_id):
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role not in ['kitchen','owner']:
+            return jsonify({'error': 'Unauthorized'}), 401
+        order = Order.query.get(order_id)
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        order.status = 'delivered'
+        for c in order.coupons:
+            c.status = 'completed'
+            c.expired = True
+            c.expired_at = datetime.utcnow()
+        db.session.commit()
+        export_csv()
+        # Create simple notification row if model exists
+        try:
+            from models import Notification
+            note = Notification(user_id=order.user_id, message=f"Your order {order.order_id} has been delivered. Thank you!")
+            db.session.add(note)
+            db.session.commit()
+        except Exception:
+            pass
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/notifications', methods=['GET', 'OPTIONS'])
+def api_notifications():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        try:
+            from models import Notification
+            notes = Notification.query.filter_by(user_id=user.id).order_by(Notification.created_at.desc()).limit(20).all()
+            return jsonify([{'id':n.id,'message':n.message,'created_at':n.created_at.isoformat(),'is_read':n.is_read} for n in notes])
+        except Exception:
+            return jsonify([])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/profile', methods=['GET', 'OPTIONS'])
+def api_user_profile():
+    if request.method == 'OPTIONS':
+        return '', 204
+    """Get current user's profile information"""
+    try:
+        user = get_auth_user()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        # Fetch fresh user data from database using the authenticated user's ID
+        authenticated_user_id = user.id
+        user = User.query.get(authenticated_user_id)
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Verify this is a customer (for customer profile page)
+        # But allow any role to view their own profile
+        created_at_str = ''
+        try:
+            if hasattr(user, 'created_at') and user.created_at:
+                created_at_str = user.created_at.isoformat()
+        except Exception:
+            pass
+        
+        profile_data = {
+            'id': user.id,
+            'name': user.name or '',
+            'email': user.email or '',
+            'role': user.role or '',
+            'phone': user.phone or '',
+            'college_id': user.college_id or '',
+            'department': user.department or '',
+            'year': user.year or '',
+            'address': user.address or '',
+            'is_vip': getattr(user, 'is_vip', False),
+<<<<<<< HEAD
+            'wallet_balance': float(getattr(user, 'wallet_balance', 0.0) or 0.0),
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+            'created_at': created_at_str
+        }
+        
+        return jsonify({
+            'success': True,
+            'user': profile_data
+        }), 200
+    except Exception as e:
+        print(f"Profile Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+<<<<<<< HEAD
+# ==================== WALLET API ENDPOINTS ====================
+@app.route('/api/user/wallet', methods=['GET', 'OPTIONS'])
+def get_wallet_balance():
+    """Get current user's wallet balance"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        # Fetch fresh user data
+        user = User.query.get(user.id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        balance = float(getattr(user, 'wallet_balance', 0.0) or 0.0)
+        
+        return jsonify({
+            'success': True,
+            'wallet_balance': balance
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+@app.route('/api/feedback', methods=['POST', 'OPTIONS'])
+def api_feedback():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        # Verify user is customer
+        if user.role != 'customer':
+            return jsonify({'error': 'Only customers can submit feedback'}), 403
+        
+        data = request.get_json() or {}
+        msg = (data.get('message') or '').strip()
+        rating = data.get('rating')
+        category = data.get('category', 'general')
+        
+        if not msg or len(msg.strip()) < 10:
+            return jsonify({'error': 'Message is required and must be at least 10 characters'}), 400
+        
+        try:
+            from models import Feedback
+            # Parse rating safely
+            rating_value = None
+            if rating is not None:
+                try:
+                    rating_int = int(rating) if isinstance(rating, (int, float)) else int(str(rating).strip())
+                    if 1 <= rating_int <= 5:
+                        rating_value = rating_int
+                except (ValueError, TypeError):
+                    rating_value = None
+            
+            fb = Feedback(
+                user_id=user.id, 
+                message=msg, 
+                rating=rating_value
+            )
+            db.session.add(fb)
+            db.session.commit()
+            return jsonify({'success': True, 'message': 'Feedback submitted successfully'}), 201
+        except Exception as e:
+            db.session.rollback()
+            print(f"Feedback submission error: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': f'Failed to submit feedback: {str(e)}'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/feedback/my', methods=['GET', 'OPTIONS'])
+def get_my_feedback():
+    if request.method == 'OPTIONS':
+        return '', 204
+    """Get current customer's feedback history"""
+    try:
+        user = get_auth_user()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        if user.role != 'customer':
+            return jsonify({'error': 'Only customers can view their feedback'}), 403
+        
+        from models import Feedback
+        feedback_list = Feedback.query.filter_by(user_id=user.id).order_by(Feedback.created_at.desc()).limit(20).all()
+        
+        result = []
+        for fb in feedback_list:
+            result.append({
+                'id': fb.id,
+                'message': fb.message,
+                'rating': fb.rating,
+                'created_at': fb.created_at.isoformat() if fb.created_at else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'feedback': result
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/dashboard-stats', methods=['GET', 'OPTIONS'])
+def owner_dashboard_stats():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+<<<<<<< HEAD
+        # Include all orders (cash, online, delivered, accepted) - exclude only rejected/cancelled
+        today_rev = db.session.query(func.sum(Order.total_amount)).filter(
+            func.date(Order.created_at)==today,
+            Order.status.notin_(['rejected', 'cancelled'])
+        ).scalar() or 0.0
+        yesterday_rev = db.session.query(func.sum(Order.total_amount)).filter(
+            func.date(Order.created_at)==yesterday,
+            Order.status.notin_(['rejected', 'cancelled'])
+        ).scalar() or 0.0
+        total_orders = Order.query.filter(
+            func.date(Order.created_at)==today,
+            Order.status.notin_(['rejected', 'cancelled'])
+        ).count()
+=======
+        today_rev = db.session.query(func.sum(Order.total_amount)).filter(func.date(Order.created_at)==today).scalar() or 0.0
+        yesterday_rev = db.session.query(func.sum(Order.total_amount)).filter(func.date(Order.created_at)==yesterday).scalar() or 0.0
+        total_orders = Order.query.filter(func.date(Order.created_at)==today).count()
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        try:
+            from models import Feedback
+            today_fb = db.session.query(func.avg(Feedback.rating)).filter(func.date(Feedback.created_at)==today).scalar()
+            avg_rating = float(today_fb) if today_fb else None
+        except Exception:
+            avg_rating = None
+        top_dish_query = db.session.query(MenuItem.name, MenuItem.icon, func.sum(OrderItem.quantity).label('qty')).join(OrderItem).join(Order).filter(func.date(Order.created_at)==today).group_by(MenuItem.id).order_by(desc('qty')).first()
+        top_dish = top_dish_query.name if top_dish_query else '—'
+        top_dish_icon = top_dish_query.icon if top_dish_query else ''
+        return jsonify({'today_revenue': float(today_rev), 'yesterday_revenue': float(yesterday_rev), 'total_orders': total_orders, 'avg_rating': avg_rating, 'top_dish': top_dish, 'top_dish_icon': top_dish_icon}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/feedback', methods=['GET', 'OPTIONS'])
+def owner_get_feedback():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        from models import Feedback
+        fb = Feedback.query.order_by(Feedback.created_at.desc()).limit(50).all()
+        return jsonify([{'id': f.id, 'message': f.message, 'rating': f.rating, 'user_id': f.user_id, 'created_at': f.created_at.isoformat() if f.created_at else None} for f in fb]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/orders/payment-status', methods=['GET', 'OPTIONS'])
+def owner_payment_status():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        orders = Order.query.order_by(Order.created_at.desc()).limit(100).all()
+        return jsonify([{'order_id': o.order_id, 'total': o.total_amount, 'transaction_id': o.transaction_id, 'status': o.status, 'payment_status': 'PAID' if o.transaction_id and o.transaction_id!='OFFLINE' and o.transaction_id!='CASH' else ('CASH' if o.transaction_id=='CASH' else 'PENDING'), 'created_at': o.created_at.isoformat() if o.created_at else None} for o in orders]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== OWNER: MENU AVAILABILITY & CASH ORDERS ====================
+@app.route('/api/owner/menu/<int:item_id>/availability', methods=['PUT', 'OPTIONS'])
+def owner_set_menu_availability(item_id):
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        data = request.get_json() or {}
+        available = bool(data.get('available', True))
+        item = MenuItem.query.get(item_id)
+        if not item:
+            return jsonify({'error': 'Menu item not found'}), 404
+        item.available = available
+        db.session.commit()
+        return jsonify({'success': True, 'id': item_id, 'available': available}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+<<<<<<< HEAD
+# ==================== IMAGE UPLOAD ENDPOINT ====================
+@app.route('/api/upload/image', methods=['POST', 'OPTIONS'])
+def upload_image():
+    """Upload image for menu items (owner only)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized - Owner access required'}), 401
+        
+        # Check if file is present
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Check file extension
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        filename = file.filename.lower()
+        if '.' not in filename or filename.rsplit('.', 1)[1] not in allowed_extensions:
+            return jsonify({'error': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'}), 400
+        
+        # Create upload directory if it doesn't exist
+        upload_folder = os.path.join('static', 'images', 'menu')
+        os.makedirs(upload_folder, exist_ok=True)
+        
+        # Generate unique filename
+        import uuid
+        file_ext = filename.rsplit('.', 1)[1]
+        unique_filename = f"{uuid.uuid4().hex[:12]}.{file_ext}"
+        filepath = os.path.join(upload_folder, unique_filename)
+        
+        # Save file
+        file.save(filepath)
+        
+        # Return URL
+        image_url = f"/static/images/menu/{unique_filename}"
+        
+        return jsonify({
+            'success': True,
+            'image_url': image_url,
+            'filename': unique_filename
+        }), 200
+        
+    except Exception as e:
+        print(f"Image Upload Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+# ==================== OWNER: ADD NEW DISH ====================
+@app.route('/api/owner/menu/add', methods=['POST', 'OPTIONS'])
+def owner_add_dish():
+    """Add new dish to menu (owner only)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized - Owner access required'}), 401
+        
+        data = request.get_json() or {}
+        name = data.get('name', '').strip()
+        price = data.get('price', 0)
+        description = data.get('description', '').strip()
+        category = data.get('category', 'Other').strip()
+        icon = data.get('icon', '🍽️')
+        image_url = data.get('image_url', '').strip()
+        tags = data.get('tags', '').strip()
+        available = bool(data.get('available', True))
+        
+        if not name or price <= 0:
+            return jsonify({'error': 'Name and price are required'}), 400
+        
+        # Create new menu item
+        menu_item = MenuItem(
+            name=name,
+            icon=icon,
+            price=float(price),
+            description=description or name,
+            category=category,
+            available=available,
+            tags=tags,
+            image_url=image_url
+        )
+        
+        db.session.add(menu_item)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'item': {
+                'id': menu_item.id,
+                'name': menu_item.name,
+                'price': menu_item.price,
+                'image_url': menu_item.image_url or ''
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Add Dish Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+# ==================== OFFER MANAGEMENT ====================
+@app.route('/api/offers/active', methods=['GET', 'OPTIONS'])
+def get_active_offer():
+    """Get currently active offer"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        active_offer = Offer.query.filter(
+            Offer.is_active == True,
+            Offer.start_date <= datetime.utcnow(),
+            or_(Offer.end_date.is_(None), Offer.end_date >= datetime.utcnow())
+        ).order_by(Offer.created_at.desc()).first()
+        
+        if not active_offer:
+            return jsonify({'active': False}), 200
+        
+        return jsonify({
+            'active': True,
+            'offer': {
+                'id': active_offer.id,
+                'name': active_offer.name,
+                'description': active_offer.description,
+                'discount_percent': active_offer.discount_percent,
+                'start_date': active_offer.start_date.isoformat() if active_offer.start_date else None,
+                'end_date': active_offer.end_date.isoformat() if active_offer.end_date else None
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/offers', methods=['GET', 'OPTIONS'])
+def owner_list_offers():
+    """List all offers (owner only)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        offers = Offer.query.order_by(Offer.created_at.desc()).all()
+        return jsonify([{
+            'id': o.id,
+            'name': o.name,
+            'description': o.description,
+            'discount_percent': o.discount_percent,
+            'start_date': o.start_date.isoformat() if o.start_date else None,
+            'end_date': o.end_date.isoformat() if o.end_date else None,
+            'is_active': o.is_active
+        } for o in offers]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/offers', methods=['POST', 'OPTIONS'])
+def owner_create_offer():
+    """Create new offer (owner only)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        data = request.get_json() or {}
+        name = data.get('name', '').strip()
+        discount_percent = float(data.get('discount_percent', 0))
+        start_date_str = data.get('start_date')
+        end_date_str = data.get('end_date')  # Can be None
+        
+        if not name or discount_percent <= 0:
+            return jsonify({'error': 'Name and discount percent are required'}), 400
+        
+        # Deactivate all existing offers
+        existing_offers = Offer.query.filter(Offer.is_active == True).all()
+        for offer in existing_offers:
+            offer.is_active = False
+        db.session.commit()
+        
+        start_date = datetime.utcnow()
+        if start_date_str:
+            try:
+                start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+            except:
+                pass
+        
+        end_date = None
+        if end_date_str:
+            try:
+                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+            except:
+                pass
+        
+        offer = Offer(
+            name=name,
+            description=data.get('description', '').strip(),
+            discount_percent=discount_percent,
+            start_date=start_date,
+            end_date=end_date,
+            is_active=True,
+            created_by=user.id
+        )
+        db.session.add(offer)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'offer': {
+                'id': offer.id,
+                'name': offer.name,
+                'discount_percent': offer.discount_percent
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/offers/<int:offer_id>', methods=['PUT', 'OPTIONS'])
+def owner_update_offer(offer_id):
+    """Update offer (owner only)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        offer = Offer.query.get(offer_id)
+        if not offer:
+            return jsonify({'error': 'Offer not found'}), 404
+        
+        data = request.get_json() or {}
+        if 'name' in data:
+            offer.name = data['name'].strip()
+        if 'description' in data:
+            offer.description = data['description'].strip()
+        if 'discount_percent' in data:
+            offer.discount_percent = float(data['discount_percent'])
+        if 'is_active' in data:
+            offer.is_active = bool(data['is_active'])
+        if 'start_date' in data:
+            try:
+                offer.start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
+            except:
+                pass
+        if 'end_date' in data:
+            if data['end_date']:
+                try:
+                    offer.end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+                except:
+                    pass
+            else:
+                offer.end_date = None
+        
+        db.session.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/offers/<int:offer_id>', methods=['DELETE', 'OPTIONS'])
+def owner_delete_offer(offer_id):
+    """Delete offer (owner only)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        offer = Offer.query.get(offer_id)
+        if not offer:
+            return jsonify({'error': 'Offer not found'}), 404
+        
+        db.session.delete(offer)
+        db.session.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# ==================== COMBO MANAGEMENT ====================
+@app.route('/api/combos', methods=['GET', 'OPTIONS'])
+def list_combos():
+    """List all available combos"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        combos = Combo.query.filter_by(available=True).all()
+        result = []
+        for combo in combos:
+            items = []
+            for combo_item in combo.items:
+                items.append({
+                    'id': combo_item.menu_item.id,
+                    'name': combo_item.menu_item.name,
+                    'icon': combo_item.menu_item.icon,
+                    'quantity': combo_item.quantity
+                })
+            result.append({
+                'id': combo.id,
+                'name': combo.name,
+                'description': combo.description,
+                'price': combo.price,
+                'icon': combo.icon,
+<<<<<<< HEAD
+                'image_url': combo.image_url or '',
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+                'items': items
+            })
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/combos', methods=['GET', 'OPTIONS'])
+def owner_list_combos():
+    """List all combos (owner only, includes unavailable)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        combos = Combo.query.all()
+        result = []
+        for combo in combos:
+            items = []
+            for combo_item in combo.items:
+                items.append({
+                    'id': combo_item.menu_item.id,
+                    'name': combo_item.menu_item.name,
+                    'icon': combo_item.menu_item.icon,
+                    'quantity': combo_item.quantity
+                })
+            result.append({
+                'id': combo.id,
+                'name': combo.name,
+                'description': combo.description,
+                'price': combo.price,
+                'icon': combo.icon,
+                'available': combo.available,
+<<<<<<< HEAD
+                'image_url': combo.image_url or '',
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+                'items': items
+            })
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/combos', methods=['POST', 'OPTIONS'])
+def owner_create_combo():
+    """Create new combo (owner only)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        data = request.get_json() or {}
+        name = data.get('name', '').strip()
+        price = float(data.get('price', 0))
+        items = data.get('items', [])  # Array of {menu_item_id, quantity}
+        
+        if not name or price <= 0 or not items:
+            return jsonify({'error': 'Name, price, and items are required'}), 400
+        
+        combo = Combo(
+            name=name,
+            description=data.get('description', '').strip(),
+            price=price,
+            icon=data.get('icon', '🍱'),
+<<<<<<< HEAD
+            available=bool(data.get('available', True)),
+            image_url=data.get('image_url', '').strip() or None
+=======
+            available=bool(data.get('available', True))
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        )
+        db.session.add(combo)
+        db.session.flush()
+        
+        for item_data in items:
+            menu_item_id = int(item_data.get('menu_item_id'))
+            quantity = int(item_data.get('quantity', 1))
+            combo_item = ComboItem(
+                combo_id=combo.id,
+                menu_item_id=menu_item_id,
+                quantity=quantity
+            )
+            db.session.add(combo_item)
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'combo_id': combo.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/combos/<int:combo_id>', methods=['PUT', 'OPTIONS'])
+def owner_update_combo(combo_id):
+    """Update combo (owner only)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        combo = Combo.query.get(combo_id)
+        if not combo:
+            return jsonify({'error': 'Combo not found'}), 404
+        
+        data = request.get_json() or {}
+        if 'name' in data:
+            combo.name = data['name'].strip()
+        if 'description' in data:
+            combo.description = data['description'].strip()
+        if 'price' in data:
+            combo.price = float(data['price'])
+        if 'icon' in data:
+            combo.icon = data['icon']
+        if 'available' in data:
+            combo.available = bool(data['available'])
+<<<<<<< HEAD
+        if 'image_url' in data:
+            combo.image_url = data['image_url'].strip() if data['image_url'] else None
+=======
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+        if 'items' in data:
+            # Delete existing items
+            ComboItem.query.filter_by(combo_id=combo.id).delete()
+            # Add new items
+            for item_data in data['items']:
+                combo_item = ComboItem(
+                    combo_id=combo.id,
+                    menu_item_id=int(item_data.get('menu_item_id')),
+                    quantity=int(item_data.get('quantity', 1))
+                )
+                db.session.add(combo_item)
+        
+        db.session.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/combos/<int:combo_id>', methods=['DELETE', 'OPTIONS'])
+def owner_delete_combo(combo_id):
+    """Delete combo (owner only)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        combo = Combo.query.get(combo_id)
+        if not combo:
+            return jsonify({'error': 'Combo not found'}), 404
+        
+        db.session.delete(combo)
+        db.session.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# ==================== DAILY ORDER LOGS ====================
+@app.route('/api/owner/daily-orders', methods=['GET', 'OPTIONS'])
+def owner_daily_orders():
+    """Get all orders for a specific day (owner only)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        target_date_str = request.args.get('date', date.today().isoformat())
+        try:
+            target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
+        except:
+            target_date = date.today()
+        
+        logs = DailyOrderLog.query.filter_by(order_date=target_date).order_by(DailyOrderLog.order_time.desc()).all()
+        
+        result = []
+        for log in logs:
+            items = []
+            try:
+                items = json.loads(log.items_json) if log.items_json else []
+            except:
+                pass
+            
+            result.append({
+                'id': log.id,
+                'order_id': log.order_id,
+                'customer_name': log.customer_name,
+                'customer_phone': log.customer_phone,
+                'customer_email': log.customer_email,
+                'order_date': log.order_date.isoformat() if log.order_date else None,
+                'order_time': log.order_time.isoformat() if log.order_time else None,
+                'total_amount': log.total_amount,
+                'transaction_id': log.transaction_id,
+                'payment_method': log.payment_method,
+                'status': log.status,
+                'items': items
+            })
+        
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/orders/create-cash', methods=['POST', 'OPTIONS'])
+def owner_create_cash_order():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        data = request.get_json() or {}
+        items = data.get('items', [])
+        if not items:
+            return jsonify({'error': 'No items'}), 400
+        # Compute total from DB prices for safety
+        total = 0.0
+        # Generate unique order ID using timestamp + random suffix
+        import random
+        order_id = f"ORD{int(datetime.utcnow().timestamp())}{random.randint(100,999)}"
+        # Ensure uniqueness
+        while Order.query.filter_by(order_id=order_id).first():
+            order_id = f"ORD{int(datetime.utcnow().timestamp())}{random.randint(100,999)}"
+        # For cash orders, user_id must be set (NOT NULL constraint)
+        # We'll use owner's ID since owner is placing the order for walk-in customer
+        order = Order(
+            order_id=order_id,
+            user_id=user.id,  # Use owner's ID for cash orders (database requires NOT NULL)
+            customer_name=data.get('customer_name', 'Walk-in Customer'),
+            customer_phone=data.get('customer_phone', '0000000000'),
+            total_amount=0.0,
+            transaction_id='CASH',
+            status='accepted'
+        )
+        db.session.add(order)
+        db.session.flush()
+        for it in items:
+            menu_item = MenuItem.query.get(int(it.get('id')))
+            qty = int(it.get('quantity', 1))
+            if menu_item and qty > 0:
+                total += (menu_item.price or 0.0) * qty
+                db.session.add(OrderItem(order_id=order.id, menu_item_id=menu_item.id, quantity=qty, price=menu_item.price))
+        order.total_amount = float(total)
+        db.session.flush()
+        
+        # Log to DailyOrderLog for cash orders
+        try:
+            order_date = datetime.utcnow().date()
+            order_time = datetime.utcnow()
+            order_items_data = []
+            for it in items:
+                menu_item = MenuItem.query.get(int(it.get('id')))
+                if menu_item:
+                    order_items_data.append({
+                        'id': menu_item.id,
+                        'name': menu_item.name,
+                        'icon': menu_item.icon,
+                        'quantity': int(it.get('quantity', 1)),
+                        'price': menu_item.price
+                    })
+            
+            daily_log = DailyOrderLog(
+                order_id=order.order_id,
+                order_db_id=order.id,
+                user_id=user.id,  # Use owner's ID for cash orders (database requires NOT NULL)
+                customer_name=order.customer_name,
+                customer_phone=order.customer_phone,
+                customer_email='',  # Cash orders don't have email
+                order_date=order_date,
+                order_time=order_time,
+                total_amount=order.total_amount,
+                transaction_id='CASH',
+                payment_method='cash',
+                status='accepted',
+                items_json=json.dumps(order_items_data)
+            )
+            db.session.add(daily_log)
+        except Exception as e:
+            print(f"Error creating daily log for cash order: {e}")
+        
+        db.session.commit()
+        export_csv()
+        return jsonify({'success': True, 'order_id': order.order_id, 'total': total}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# ==================== KITCHEN: STATUS UPDATES & LIVE FEED ====================
+@app.route('/api/kitchen/orders/<int:order_id>/status', methods=['PUT', 'OPTIONS'])
+def kitchen_update_status(order_id):
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role not in ['kitchen', 'owner']:
+            return jsonify({'error': 'Unauthorized'}), 401
+        data = request.get_json() or {}
+        status = str(data.get('status', '')).lower()
+        if status not in ['preparing','ready','delivered','accepted','rejected','pending']:
+            return jsonify({'error': 'Invalid status'}), 400
+        order = Order.query.get(order_id)
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        order.status = status
+        ts = datetime.utcnow()
+        if status == 'preparing':
+            order.preparation_started_at = order.preparation_started_at or ts
+        if status == 'ready':
+            order.preparation_completed_at = ts
+            try:
+                from models import Notification
+                db.session.add(Notification(user_id=order.user_id, message=f"Your order {order.order_id} is ready for pickup."))
+            except Exception:
+                pass
+        if status == 'delivered':
+            for c in order.coupons:
+                c.status = 'completed'
+                c.expired = True
+                c.expired_at = ts
+            try:
+                from models import Notification
+                db.session.add(Notification(user_id=order.user_id, message=f"Your order {order.order_id} has been delivered. Thank you!"))
+            except Exception:
+                pass
+        db.session.commit()
+        export_csv()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/kitchen/orders/live', methods=['GET', 'OPTIONS'])
+def kitchen_live_orders():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role not in ['kitchen','owner']:
+            return jsonify({'error': 'Unauthorized'}), 401
+        orders = Order.query.filter(Order.status.in_(['pending','accepted','preparing','ready'])).order_by(Order.created_at.desc()).all()
+        return jsonify([serialize_order(o) for o in orders]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/kitchen/orders/by-code/<order_code>/deliver', methods=['PUT', 'OPTIONS'])
+def kitchen_deliver_by_code(order_code):
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role not in ['kitchen','owner']:
+            return jsonify({'error': 'Unauthorized'}), 401
+        order = Order.query.filter_by(order_id=order_code).first()
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        order.status = 'delivered'
+        ts = datetime.utcnow()
+        for c in order.coupons:
+            c.status = 'completed'
+            c.expired = True
+            c.expired_at = ts
+        try:
+            from models import Notification
+            db.session.add(Notification(user_id=order.user_id, message=f"Your order {order.order_id} has been delivered. Thank you!"))
+        except Exception:
+            pass
+        db.session.commit()
+        export_csv()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/kitchen/orders/history', methods=['GET', 'OPTIONS'])
+def kitchen_order_history():
+    """Get order history for kitchen staff with optional filters"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user:
+            print(f"[KITCHEN HISTORY] No user found - auth failed")
+            return jsonify({'error': 'Unauthorized - Please login'}), 401
+        
+        if user.role not in ['kitchen', 'owner']:
+            print(f"[KITCHEN HISTORY] Role mismatch - expected 'kitchen' or 'owner', got '{user.role}'")
+            return jsonify({'error': f'Unauthorized - Kitchen/Owner access required. Your role is: {user.role}'}), 403
+        
+        status_filter = request.args.get('status', '').strip()
+        date_filter = request.args.get('date', '').strip()
+        
+        # Base query - all orders (not just live ones)
+        query = Order.query
+        
+        # Filter by status if provided
+        if status_filter:
+            query = query.filter(Order.status == status_filter.lower())
+        
+        # Filter by date if provided
+        if date_filter:
+            try:
+                filter_date = datetime.strptime(date_filter, '%Y-%m-%d').date()
+                query = query.filter(db.cast(Order.created_at, db.Date) == filter_date)
+            except ValueError:
+                pass
+        
+        # Order by most recent first
+        orders = query.order_by(Order.created_at.desc()).limit(500).all()
+        
+        return jsonify([serialize_order(o) for o in orders]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/orders/history', methods=['GET', 'OPTIONS'])
+def owner_order_history():
+    """Get order history for owner with optional filters"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user:
+            print(f"[OWNER HISTORY] No user found - auth failed")
+            return jsonify({'error': 'Unauthorized - Please login'}), 401
+        
+        print(f"[OWNER HISTORY] User: {user.name}, Role: {user.role}")
+        
+        if user.role != 'owner':
+            print(f"[OWNER HISTORY] Role mismatch - expected 'owner', got '{user.role}'")
+            return jsonify({'error': f'Unauthorized - Owner access required. Your role is: {user.role}'}), 403
+        
+        status_filter = request.args.get('status', '').strip()
+        date_filter = request.args.get('date', '').strip()
+        payment_filter = request.args.get('payment', '').strip()
+        
+        # Base query - all orders
+        query = Order.query
+        
+        # Filter by status if provided
+        if status_filter:
+            query = query.filter(Order.status == status_filter.lower())
+        
+        # Filter by date if provided
+        if date_filter:
+            try:
+                filter_date = datetime.strptime(date_filter, '%Y-%m-%d').date()
+                query = query.filter(db.cast(Order.created_at, db.Date) == filter_date)
+            except ValueError:
+                pass
+        
+        # Filter by payment status if provided
+        if payment_filter:
+            if payment_filter.upper() == 'PAID':
+                query = query.filter(Order.transaction_id != 'CASH', Order.transaction_id != 'PENDING', Order.transaction_id != '')
+            elif payment_filter.upper() == 'CASH':
+                query = query.filter(Order.transaction_id == 'CASH')
+            elif payment_filter.upper() == 'PENDING':
+                query = query.filter(or_(Order.transaction_id.in_(['', 'PENDING']), Order.transaction_id.is_(None)))
+        
+        # Order by most recent first
+        orders = query.order_by(Order.created_at.desc()).limit(1000).all()
+        
+        # Serialize with additional payment info
+        result = []
+        for o in orders:
+            order_data = serialize_order(o)
+            # Add payment status
+            if o.transaction_id == 'CASH':
+                order_data['payment_status'] = 'CASH'
+            elif o.transaction_id and o.transaction_id not in ['', 'PENDING']:
+                order_data['payment_status'] = 'PAID'
+            else:
+                order_data['payment_status'] = 'PENDING'
+            result.append(order_data)
+        
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def export_csv():
+    try:
+        # users.csv
+        with open('users.csv','w',newline='',encoding='utf-8') as f:
+            w = csv.writer(f)
+            w.writerow(['id','name','email','phone','college_id','role'])
+            for u in User.query.all():
+                w.writerow([u.id,u.name,u.email,u.phone,u.college_id,u.role])
+        # orders.csv
+        with open('orders.csv','w',newline='',encoding='utf-8') as f:
+            w = csv.writer(f)
+            w.writerow(['id','order_id','user_id','total','status','created_at'])
+            for o in Order.query.order_by(Order.created_at.desc()).all():
+                w.writerow([o.id,o.order_id,o.user_id,o.total_amount,o.status,o.created_at.isoformat()])
+    except Exception:
+        pass
+
+# ==================== NEW ROUTES: KITCHEN PORTAL ====================
+
+KITCHEN_HTML = """
+<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>Kitchen Portal</title>
+<link rel='preconnect' href='https://fonts.googleapis.com'><style>body{font-family:Segoe UI,Tahoma,Arial;margin:0;background:#0f172a;color:#e2e8f0} .top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#111827;position:sticky;top:0} .status{display:inline-block;padding:6px 10px;border-radius:999px;font-size:.8em;margin-right:8px} .pending{background:#f59e0b;color:#111827} .preparing{background:#3b82f6} .ready{background:#22c55e} .rejected{background:#ef4444} .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:16px} .card{background:#111827;border-radius:12px;padding:12px;border:1px solid #1f2937} button{padding:8px 10px;border:none;border-radius:8px;background:#374151;color:#e5e7eb;margin:4px;cursor:pointer} button.primary{background:#3b82f6} button.warn{background:#f59e0b} button.danger{background:#ef4444} .metrics{display:flex;gap:12px;padding:0 16px 12px} .metric{flex:1;background:#111827;border:1px solid #1f2937;border-radius:12px;padding:12px;text-align:center}
+</style></head><body>
+<div class='top'><div><strong>🍳 Kitchen Portal</strong></div><div><button onclick="location.reload()">Refresh</button></div></div>
+<div class='metrics'><div class='metric'><div id='m_completed' style='font-size:1.4em'>0</div><div>Completed Today</div></div><div class='metric'><div id='m_avg' style='font-size:1.4em'>--</div><div>Avg Prep Time</div></div></div>
+<div style='padding:0 16px 8px'><select id='filter' onchange='load()'><option value='all'>All</option><option value='pending'>Pending</option><option value='preparing'>Preparing</option><option value='ready'>Ready</option></select></div>
+<div id='wrap' class='grid'></div>
+<audio id='ping' src='https://actions.google.com/sounds/v1/alarms/beep_short.ogg' preload='auto'></audio>
+<script>
+const API = location.origin + '/api';
+let lastCount = 0;
+async function load(){
+  const q = await fetch(API + '/orders/my-orders', {headers:{'Authorization': localStorage.getItem('authToken')?'Bearer '+localStorage.getItem('authToken'):''}});
+  let data = []; try{ data = await q.json(); }catch(e){}
+  const f = document.getElementById('filter').value;
+  const filtered = data.filter(o=> f==='all' ? true : o.status===f || o.status===('kitchen_'+f));
+  const w = document.getElementById('wrap'); w.innerHTML='';
+  filtered.forEach(o=>{
+    const div=document.createElement('div');
+    div.className='card';
+    div.innerHTML = `<div style='display:flex;justify-content:space-between;align-items:center;'>
+      <div><strong>#${o.id}</strong></div>
+      <span class='status ${o.status.includes('pending')?'pending':(o.status.includes('preparing')?'preparing':(o.status.includes('ready')?'ready':'rejected'))}'>${o.status.toUpperCase()}</span>
+    </div>
+    <div style='color:#9ca3af;margin:6px 0'>${new Date(o.timestamp).toLocaleTimeString()}</div>
+    <div>${o.items.map(i=>`${i.icon||''} ${i.name} x${i.quantity}`).join('<br>')}</div>
+    <div style='margin-top:8px;display:flex;flex-wrap:wrap'>
+      <button class='primary' onclick=upd('${o.id}','accepted')>Accept</button>
+      <button class='warn' onclick=upd('${o.id}','preparing')>Preparing</button>
+      <button class='primary' onclick=upd('${o.id}','ready')>Ready</button>
+      <button class='danger' onclick=upd('${o.id}','rejected')>Reject</button>
+    </div>`;
+    w.appendChild(div);
+  });
+  if (data.length > lastCount){ try{document.getElementById('ping').play()}catch(e){} }
+  lastCount = data.length;
+}
+async function upd(id, s){
+  // Local-only status update on this MVP (for full sync, add a server PATCH route)
+  localStorage.setItem('kitchen_update_'+id, s);
+  load();
+}
+load(); setInterval(load, 5000);
+</script></body></html>
+"""
+
+@app.route('/kitchen', methods=['GET'])
+def kitchen_portal():
+    return render_template_string(KITCHEN_HTML)
+
+# ==================== NEW ROUTES: ADMIN PORTAL (MVP) ====================
+
+ADMIN_HTML = """
+<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Admin Portal</title>
+<script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+<style>body{font-family:Segoe UI,Tahoma,Arial;margin:0;background:#0b1020;color:#eaeef7} .top{padding:16px;background:#0f1530} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;padding:16px} .card{background:#0f1530;border-radius:12px;padding:12px;border:1px solid #1b2348}</style></head>
+<body><div class='top'><strong>📊 Admin Analytics</strong></div>
+<div class='grid'>
+  <div class='card'><canvas id='sales'></canvas></div>
+  <div class='card'><canvas id='perhour'></canvas></div>
+  <div class='card'><canvas id='top5'></canvas></div>
+</div>
+<script>
+const API = location.origin + '/api';
+async function fetchJSON(u){ try{ const r=await fetch(u,{headers:{'Authorization': localStorage.getItem('authToken')?'Bearer '+localStorage.getItem('authToken'):''}}); return await r.json(); }catch(e){return []}}
+(async ()=>{
+  // Top dishes (reuses existing analytics endpoint for today)
+  const date = new Date().toISOString().split('T')[0];
+  const top = await fetchJSON(API + '/orders/analytics?date='+date);
+  const names = top.map(x=>x.name); const qty = top.map(x=>x.quantity);
+  new Chart(document.getElementById('top5'),{type:'bar',data:{labels:names,datasets:[{label:'Qty',data:qty,backgroundColor:'#3b82f6'}]}});
+  // Fake sales and per hour (MVP placeholders)
+  new Chart(document.getElementById('sales'),{type:'doughnut',data:{labels:['Today','Yesterday'],datasets:[{data:[top.reduce((s,x)=>s+(x.revenue||0),0), Math.max(0, top.reduce((s,x)=>s+(x.revenue||0),0)-500)],backgroundColor:['#22c55e','#f59e0b']} ]}});
+  new Chart(document.getElementById('perhour'),{type:'line',data:{labels:[...Array(8)].map((_,i)=>`${i*3}:00`),datasets:[{label:'Orders',data:[5,3,6,2,4,7,5,8],borderColor:'#a78bfa'}]}});
+})();
+</script></body></html>
+"""
+
+@app.route('/admin', methods=['GET'])
+def admin_portal():
+    return render_template_string(ADMIN_HTML)
+# ==================== INIT DATABASE ====================
+
+def init_db():
+    with app.app_context():
+        # Create tables
+        db.create_all()
+        
+<<<<<<< HEAD
+        # Add image_url column to combo table if it doesn't exist (for existing databases)
+        try:
+            import sqlite3
+            conn = sqlite3.connect('canteen.db')
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(combo)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'image_url' not in columns:
+                cursor.execute('ALTER TABLE combo ADD COLUMN image_url VARCHAR(500)')
+                conn.commit()
+                print("✅ Added image_url column to combo table")
+            
+            # Add wallet_balance column to user table if it doesn't exist
+            cursor.execute("PRAGMA table_info(user)")
+            user_columns = [row[1] for row in cursor.fetchall()]
+            if 'wallet_balance' not in user_columns:
+                cursor.execute('ALTER TABLE user ADD COLUMN wallet_balance FLOAT DEFAULT 0.0')
+                conn.commit()
+                print("✅ Added wallet_balance column to user table")
+            
+            conn.close()
+        except Exception as e:
+            print(f"Note: Could not check/add columns: {e}")
+            # Columns will be added automatically on next db.create_all() if table doesn't exist
+        
+        # Add menu items if empty
+        if MenuItem.query.count() == 0:
+            items = [
+                MenuItem(name="Chaha", icon="🍵", price=10, description="Hot tea", category="Beverages", tags="breakfast,tea", available=True, image_url="/static/images/menu/chaha.jpg"),
+                
+=======
+        # Add menu items if empty
+        if MenuItem.query.count() == 0:
+            items = [
+                MenuItem(name="Chaha", icon="☕", price=10, description="Hot Indian tea", category="Beverages", tags="tea,breakfast", available=True, image_url="/static/images/menu/chaha.jpg"),
+                MenuItem(name="Coffee", icon="☕", price=20, description="Hot coffee", category="Beverages", tags="coffee,breakfast", available=True, image_url="/static/images/menu/coffee.jpg"),
+                MenuItem(name="Padapav", icon="🍔", price=15, description="Vada pav - popular street food", category="Street Food", tags="snack,fast-food", available=True, image_url="/static/images/menu/padapav.jpg"),
+                MenuItem(name="Samosa", icon="🥟", price=20, description="Crispy fried samosa", category="Snacks", tags="snack,vegetarian", available=True, image_url="/static/images/menu/samosa.jpg"),
+                MenuItem(name="Poha", icon="🍚", price=20, description="Flattened rice with spices", category="Breakfast", tags="breakfast,indian", available=True, image_url="/static/images/menu/poha.jpg"),
+                MenuItem(name="Upama", icon="🍲", price=20, description="Semolina upama", category="Breakfast", tags="breakfast,indian", available=True, image_url="/static/images/menu/upama.jpg"),
+                MenuItem(name="Sandwich", icon="🥪", price=100, description="Vegetable sandwich", category="Snacks", tags="lunch,snack", available=True, image_url="/static/images/menu/sandwich.jpg"),
+                MenuItem(name="Buttermilk (Tak)", icon="🥛", price=15, description="Refreshing buttermilk", category="Beverages", tags="drink,cold", available=True, image_url="/static/images/menu/buttermilk.jpg"),
+                MenuItem(name="Paratha", icon="🥞", price=60, description="Flaky Indian flatbread", category="Main Course", tags="lunch,indian", available=True, image_url="/static/images/menu/paratha.jpg"),
+                MenuItem(name="Misal", icon="🍲", price=60, description="Spicy misal pav", category="Street Food", tags="lunch,spicy", available=True, image_url="/static/images/menu/misal.jpg"),
+                MenuItem(name="Dal Khichadi", icon="🍛", price=60, description="Comforting dal and rice", category="Main Course", tags="lunch,indian", available=True, image_url="/static/images/menu/dal_khichadi.jpg"),
+                MenuItem(name="Poli Bhaji", icon="🍛", price=40, description="Indian flatbread with vegetable curry", category="Main Course", tags="lunch,indian", available=True, image_url="/static/images/menu/poli_bhaji.jpg"),
+                MenuItem(name="Shezwan Rice", icon="🍚", price=70, description="Spicy Schezwan fried rice", category="Rice", tags="lunch,spicy,chinese", available=True, image_url="/static/images/menu/shezwan_rice.jpg"),
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+            ]
+            for item in items:
+                db.session.add(item)
+            db.session.commit()
+            print("✅ Menu items initialized")
+        
+        # Add test users if empty
+        if User.query.count() == 0:
+            users = [
+                User(
+                    name="Test Customer",
+                    email="customer@test.com",
+                    phone="9999999999",
+                    college_id="CUST001",
+                    password=generate_password_hash("pass123"),
+                    role="customer",
+                    department="Computer Science",
+                    year="3rd Year",
+                    address="Pune, Maharashtra"
+                ),
+                User(
+                    name="Admin Owner",
+                    email="owner@test.com",
+                    phone="8888888888",
+                    college_id="owner",
+                    password=generate_password_hash("pass123"),
+                    role="owner",
+                    department="Management",
+                    year="Staff"
+                ),
+                User(
+                    name="Kitchen Staff",
+                    email="kitchen@test.com",
+                    phone="7777777777",
+                    college_id="kitchen",
+                    password=generate_password_hash("pass123"),
+                    role="kitchen",
+                    department="Kitchen",
+                    year="Staff"
+                ),
+            ]
+            for user in users:
+                db.session.add(user)
+            db.session.commit()
+            print("Test users initialized")
+
+if __name__ == '__main__':
+    # Initialize database
+    init_db()
+    
+    # Register blueprints
+    from financial_reports import financial_reports_bp
+    from customer_management import customer_management_bp
+    from owner_analytics_dashboard import owner_analytics_bp
+    from menu_pricing_management import menu_management_bp
+    from inventory_management import inventory_bp
+    from real_time_orders import kitchen_orders_bp
+    from menu_availability import menu_availability_bp
+    from kitchen_analytics import kitchen_analytics_bp
+
+    app.register_blueprint(financial_reports_bp)
+    app.register_blueprint(customer_management_bp)
+    app.register_blueprint(owner_analytics_bp)
+    app.register_blueprint(menu_management_bp)
+    app.register_blueprint(inventory_bp)
+    app.register_blueprint(kitchen_orders_bp)
+    app.register_blueprint(menu_availability_bp)
+    app.register_blueprint(kitchen_analytics_bp)
+    
+    # Register advanced features blueprint
+    from advanced_features import advanced_features_bp
+    app.register_blueprint(advanced_features_bp)
+    
+    # Register chatbot blueprint
+    from chatbot_routes import chatbot_bp
+    app.register_blueprint(chatbot_bp)
+    
+
+    print("\n" + "="*70)
+    print("MMCOE SMART CANTEEN BACKEND SERVER")
+    print("="*70)
+    print("Server URL: http://localhost:5000")
+    print("API Base: http://localhost:5000/api")
+    print("CORS: Enabled for all origins")
+    print("\nTEST ACCOUNTS:")
+    print("   Customer: customer@test.com / pass123")
+    print("   Owner: owner / pass123")
+    print("   Kitchen: kitchen / pass123")
+    print("\nNOTES:")
+    print("   - OTP is displayed in console (no email service required)")
+    print("   - All endpoints support CORS")
+    print("   - Database: SQLite (canteen.db)")
+    print("="*70 + "\n")
+
+<<<<<<< HEAD
+=======
+# ==================== REGISTER NEW BLUEPRINTS ====================
+# These are ADDITIVE - they don't modify existing routes
+#
+# Inventory & Suppliers (Owner)
+# from inventory_suppliers import inventory_suppliers_bp  # pyright: ignore[reportMissingImports]
+# app.register_blueprint(inventory_suppliers_bp)
+#
+# System Settings (Owner)
+# from system_settings import system_settings_bp  # pyright: ignore[reportMissingImports]
+# app.register_blueprint(system_settings_bp)
+#
+# Promotions (Owner)
+# from promotions import promotions_bp  # pyright: ignore[reportMissingImports]
+# app.register_blueprint(promotions_bp)
+#
+# from system_settings import system_settings_bp  # pyright: ignore[reportMissingImports]
+# from promotions import promotions_bp  # pyright: ignore[reportMissingImports]
+#
+# app.register_blueprint(inventory_suppliers_bp)
+# app.register_blueprint(system_settings_bp)
+# app.register_blueprint(promotions_bp)
+#
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+print("Blueprints registered")
+# Run server
+app.run(debug=True, port=5000, host='0.0.0.0')

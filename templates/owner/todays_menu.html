@@ -1,0 +1,469 @@
+{% extends 'base_owner.html' %}
+{% block title %}Today's Menu{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">🍽️ Manage Today's Menu</h2>
+    <p style="color:#64748b;margin-bottom:20px">Toggle availability of menu items for today</p>
+<<<<<<< HEAD
+    <div style="margin-bottom:20px">
+        <button class="btn" onclick="selectAll()">Select All</button>
+        <button class="btn ghost" onclick="deselectAll()">Deselect All</button>
+        <button class="btn" onclick="showAddDishModal()" style="background:linear-gradient(135deg, #22c55e, #16a34a);margin-left:10px">➕ Add New Dish</button>
+    </div>
+    <div id="menuRoot">Loading menu...</div>
+</div>
+
+<!-- Add New Dish Modal -->
+<div id="addDishModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:16px;padding:24px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto">
+        <h2 style="margin-top:0;margin-bottom:20px">➕ Add New Dish</h2>
+        <form id="addDishForm" onsubmit="handleAddDish(event)">
+            <div style="margin-bottom:16px">
+                <label style="display:block;margin-bottom:6px;font-weight:600">Dish Name *</label>
+                <input type="text" id="dishName" required style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px">
+            </div>
+            <div style="margin-bottom:16px">
+                <label style="display:block;margin-bottom:6px;font-weight:600">Price (₹) *</label>
+                <input type="number" id="dishPrice" required min="0" step="0.01" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px">
+            </div>
+            <div style="margin-bottom:16px">
+                <label style="display:block;margin-bottom:6px;font-weight:600">Description</label>
+                <textarea id="dishDescription" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;min-height:60px"></textarea>
+            </div>
+            <div style="margin-bottom:16px">
+                <label style="display:block;margin-bottom:6px;font-weight:600">Category</label>
+                <input type="text" id="dishCategory" value="Other" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px">
+            </div>
+            <div style="margin-bottom:16px">
+                <label style="display:block;margin-bottom:6px;font-weight:600">Icon (emoji)</label>
+                <input type="text" id="dishIcon" value="🍽️" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px">
+            </div>
+            <div style="margin-bottom:16px">
+                <label style="display:block;margin-bottom:6px;font-weight:600">Image</label>
+                <input type="file" id="dishImage" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" onchange="handleImagePreview(event)" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px">
+                <div id="imagePreview" style="margin-top:10px;display:none">
+                    <img id="previewImg" src="" alt="Preview" style="max-width:200px;max-height:200px;border-radius:8px;border:2px solid #e5e7eb">
+                </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:20px">
+                <button type="submit" class="btn" style="flex:1">Add Dish</button>
+                <button type="button" class="btn ghost" onclick="closeAddDishModal()" style="flex:1">Cancel</button>
+            </div>
+        </form>
+=======
+    <div style="margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <button class="btn" onclick="selectAll()">Select All</button>
+        <button class="btn ghost" onclick="deselectAll()">Deselect All</button>
+        <button class="btn" onclick="showAddDishForm()" style="background:linear-gradient(135deg, #22c55e, #16a34a);color:#fff">➕ Add New Dish</button>
+    </div>
+    <div id="menuRoot">Loading menu...</div>
+    
+    <!-- Add Dish Modal -->
+    <div id="addDishModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center">
+        <div style="background:#fff;padding:30px;border-radius:16px;max-width:600px;width:90%;max-height:90vh;overflow-y:auto">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+                <h3 style="margin:0">Add New Dish</h3>
+                <button onclick="closeAddDishForm()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#64748b">&times;</button>
+            </div>
+            <form id="addDishForm" style="display:flex;flex-direction:column;gap:16px">
+                <div>
+                    <label style="display:block;margin-bottom:6px;font-weight:700">Dish Name *</label>
+                    <input type="text" id="dishName" required style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
+                </div>
+                <div>
+                    <label style="display:block;margin-bottom:6px;font-weight:700">Price (₹) *</label>
+                    <input type="number" id="dishPrice" required min="0" step="0.01" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
+                </div>
+                <div>
+                    <label style="display:block;margin-bottom:6px;font-weight:700">Category *</label>
+                    <input type="text" id="dishCategory" required placeholder="e.g., Beverages, Snacks, Main Course" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
+                </div>
+                <div>
+                    <label style="display:block;margin-bottom:6px;font-weight:700">Description</label>
+                    <textarea id="dishDescription" placeholder="Optional description" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;min-height:60px"></textarea>
+                </div>
+                <div>
+                    <label style="display:block;margin-bottom:6px;font-weight:700">Icon (Emoji)</label>
+                    <input type="text" id="dishIcon" placeholder="🍽️" maxlength="2" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
+                </div>
+                <div>
+                    <label style="display:block;margin-bottom:6px;font-weight:700">Dish Photo</label>
+                    <input type="file" id="dishImage" accept="image/*" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
+                    <div id="imagePreview" style="margin-top:10px;display:none">
+                        <img id="previewImg" src="" alt="Preview" style="max-width:200px;max-height:200px;border-radius:8px;object-fit:cover" />
+                    </div>
+                    <div id="imageUploadStatus" style="margin-top:8px;font-size:14px;color:#64748b"></div>
+                </div>
+                <div style="display:flex;gap:12px;margin-top:10px">
+                    <button type="submit" class="btn" style="flex:1">Add Dish</button>
+                    <button type="button" class="btn ghost" onclick="closeAddDishForm()">Cancel</button>
+                </div>
+            </form>
+        </div>
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+    </div>
+</div>
+
+<script>
+<<<<<<< HEAD
+// Make loadMenu globally accessible
+window.loadMenu = null;
+
+(async function(){
+  const token = localStorage.getItem('authToken') || '';
+  
+  async function loadMenuFunc(){
+=======
+(async function(){
+  const token = localStorage.getItem('authToken') || '';
+  
+  async function loadMenu(){
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+    try{
+      const res = await fetch('/api/menu/all');
+      const list = await res.json();
+      const root = document.getElementById('menuRoot');
+      
+      if(!Array.isArray(list) || !list.length){
+        root.textContent = 'No menu items found.';
+        return;
+      }
+      
+      root.innerHTML = list.map(i=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding:12px 0">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:24px">${i.icon||'🍽️'}</span>
+            <div>
+              <div style="font-weight:700;color:#111827">${i.name}</div>
+              <div style="color:#64748b;font-size:14px">${i.category || 'Uncategorized'} • ₹${i.price}</div>
+              ${i.description ? `<div style="color:#64748b;font-size:12px;margin-top:4px">${i.description}</div>` : ''}
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 16px;border-radius:8px;border:2px solid ${i.available ? '#22c55e' : '#e5e7eb'};background:${i.available ? '#f0fdf4' : '#fff'}">
+            <input type="checkbox" id="menu_${i.id}" ${i.available?'checked':''} onchange="toggleAvailability(${i.id}, this.checked)" style="cursor:pointer;width:18px;height:18px">
+            <span style="font-weight:600;color:${i.available ? '#22c55e' : '#64748b'}">${i.available ? 'Available' : 'Unavailable'}</span>
+          </label>
+        </div>
+      `).join('');
+    }catch(e){
+      document.getElementById('menuRoot').innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load menu: ' + e.message + '</div>';
+      console.error(e);
+    }
+  }
+  
+  window.toggleAvailability = async function(id, available){
+    try{
+      const res = await fetch(`/api/owner/menu/${id}/availability`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': token ? 'Bearer ' + token : '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({available: available})
+      });
+      
+      if(!res.ok){
+        const error = await res.json().catch(() => ({error: 'Failed to update'}));
+        alert('Failed to update: ' + (error.error || 'Unknown error'));
+        // Reload to reset checkbox
+        loadMenu();
+        return;
+      }
+      
+      // Update UI without reload
+      const checkbox = document.getElementById(`menu_${id}`);
+      if(checkbox){
+        const label = checkbox.closest('label');
+        if(available){
+          label.style.borderColor = '#22c55e';
+          label.style.background = '#f0fdf4';
+          label.querySelector('span').style.color = '#22c55e';
+          label.querySelector('span').textContent = 'Available';
+        } else {
+          label.style.borderColor = '#e5e7eb';
+          label.style.background = '#fff';
+          label.querySelector('span').style.color = '#64748b';
+          label.querySelector('span').textContent = 'Unavailable';
+        }
+      }
+    }catch(e){
+      alert('Error: ' + e.message);
+      loadMenu();
+    }
+  };
+  
+  window.selectAll = function(){
+    const checkboxes = document.querySelectorAll('#menuRoot input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      if(!cb.checked){
+        cb.checked = true;
+        const id = parseInt(cb.id.replace('menu_', ''));
+        toggleAvailability(id, true);
+      }
+    });
+  };
+  
+  window.deselectAll = function(){
+    const checkboxes = document.querySelectorAll('#menuRoot input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      if(cb.checked){
+        cb.checked = false;
+        const id = parseInt(cb.id.replace('menu_', ''));
+        toggleAvailability(id, false);
+      }
+    });
+  };
+  
+<<<<<<< HEAD
+  // Assign to global scope
+  window.loadMenu = loadMenuFunc;
+  
+  loadMenuFunc();
+  // Refresh every 30 seconds to show updates
+  setInterval(loadMenuFunc, 30000);
+})();
+
+// Add Dish Modal Functions
+window.showAddDishModal = function(){
+  const modal = document.getElementById('addDishModal');
+  if(modal) {
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+  }
+};
+
+window.closeAddDishModal = function(){
+  const modal = document.getElementById('addDishModal');
+  if(modal) modal.style.display = 'none';
+  // Reset form
+  const form = document.getElementById('addDishForm');
+  if(form) form.reset();
+  const preview = document.getElementById('imagePreview');
+  if(preview) preview.style.display = 'none';
+};
+
+window.handleImagePreview = function(event){
+  const file = event.target.files[0];
+  if(file){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const preview = document.getElementById('imagePreview');
+      const previewImg = document.getElementById('previewImg');
+      if(preview && previewImg){
+        previewImg.src = e.target.result;
+        preview.style.display = 'block';
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
+window.handleAddDish = async function(event){
+  event.preventDefault();
+  
+  const token = localStorage.getItem('authToken') || '';
+  if(!token){
+    alert('Please login first');
+    return;
+  }
+  
+  const name = document.getElementById('dishName').value.trim();
+  const price = parseFloat(document.getElementById('dishPrice').value);
+  const description = document.getElementById('dishDescription').value.trim();
+  const category = document.getElementById('dishCategory').value.trim() || 'Other';
+  const icon = document.getElementById('dishIcon').value.trim() || '🍽️';
+  const imageFile = document.getElementById('dishImage').files[0];
+  
+  if(!name || price <= 0){
+    alert('Name and price are required');
+    return;
+  }
+  
+  try{
+    let imageUrl = '';
+    
+    // Upload image if provided
+    if(imageFile){
+      const formData = new FormData();
+      formData.append('file', imageFile);
+      
+      const uploadRes = await fetch('/api/upload/image', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token
+        },
+        body: formData
+      });
+      
+      if(uploadRes.ok){
+        const uploadData = await uploadRes.json();
+        imageUrl = uploadData.image_url || '';
+      } else {
+        const error = await uploadRes.json().catch(() => ({error: 'Upload failed'}));
+        alert('Image upload failed: ' + (error.error || 'Unknown error'));
+        return;
+      }
+    }
+    
+    // Add dish
+    const addRes = await fetch('/api/owner/menu/add', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: name,
+        price: price,
+        description: description,
+        category: category,
+        icon: icon,
+        image_url: imageUrl,
+        available: true
+      })
+    });
+    
+    if(addRes.ok){
+      alert('Dish added successfully!');
+      closeAddDishModal();
+      // Reload menu
+      if(window.loadMenu && typeof window.loadMenu === 'function') {
+        window.loadMenu();
+      } else {
+        location.reload();
+      }
+    } else {
+      const error = await addRes.json().catch(() => ({error: 'Failed to add dish'}));
+      alert('Failed to add dish: ' + (error.error || 'Unknown error'));
+    }
+  } catch(e){
+    console.error('Error adding dish:', e);
+    alert('Error: ' + e.message);
+  }
+};
+
+// Close modal when clicking outside
+document.addEventListener('DOMContentLoaded', function(){
+  const modal = document.getElementById('addDishModal');
+  if(modal){
+    modal.addEventListener('click', function(e){
+      if(e.target === modal){
+        closeAddDishModal();
+      }
+    });
+  }
+});
+=======
+  loadMenu();
+  // Refresh every 30 seconds to show updates
+  setInterval(loadMenu, 30000);
+  
+  // Image preview
+  const dishImage = document.getElementById('dishImage');
+  if(dishImage){
+    dishImage.addEventListener('change', function(e){
+      const file = e.target.files[0];
+      if(file){
+        const reader = new FileReader();
+        reader.onload = function(e){
+          document.getElementById('previewImg').src = e.target.result;
+          document.getElementById('imagePreview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+  
+  // Add Dish Form
+  window.showAddDishForm = function(){
+    document.getElementById('addDishModal').style.display = 'flex';
+  };
+  
+  window.closeAddDishForm = function(){
+    document.getElementById('addDishModal').style.display = 'none';
+    document.getElementById('addDishForm').reset();
+    document.getElementById('imagePreview').style.display = 'none';
+    document.getElementById('imageUploadStatus').textContent = '';
+  };
+  
+  document.getElementById('addDishForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const statusDiv = document.getElementById('imageUploadStatus');
+    statusDiv.textContent = 'Uploading...';
+    statusDiv.style.color = '#64748b';
+    
+    try{
+      let imageUrl = null;
+      
+      // Upload image if provided
+      const imageFile = document.getElementById('dishImage').files[0];
+      if(imageFile){
+        const formData = new FormData();
+        formData.append('file', imageFile);
+        
+        const uploadRes = await fetch('/api/upload/image', {
+          method: 'POST',
+          headers: {
+            'Authorization': token ? 'Bearer ' + token : ''
+          },
+          body: formData
+        });
+        
+        if(!uploadRes.ok){
+          throw new Error('Image upload failed');
+        }
+        
+        const uploadData = await uploadRes.json();
+        imageUrl = uploadData.image_url;
+        statusDiv.textContent = 'Image uploaded ✓';
+        statusDiv.style.color = '#22c55e';
+      }
+      
+      // Create menu item
+      const itemData = {
+        name: document.getElementById('dishName').value,
+        price: parseFloat(document.getElementById('dishPrice').value),
+        category: document.getElementById('dishCategory').value,
+        description: document.getElementById('dishDescription').value || '',
+        icon: document.getElementById('dishIcon').value || '🍽️',
+        available: true,
+        tags: '',
+        image_url: imageUrl
+      };
+      
+      const res = await fetch('/api/owner/menu/items', {
+        method: 'POST',
+        headers: {
+          'Authorization': token ? 'Bearer ' + token : '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(itemData)
+      });
+      
+      if(!res.ok){
+        const error = await res.json().catch(() => ({error: 'Failed to create dish'}));
+        throw new Error(error.error || 'Failed to create dish');
+      }
+      
+      alert('Dish added successfully!');
+      closeAddDishForm();
+      loadMenu();
+    }catch(e){
+      statusDiv.textContent = 'Error: ' + e.message;
+      statusDiv.style.color = '#ef4444';
+      console.error(e);
+    }
+  });
+  
+  // Close modal on outside click
+  document.getElementById('addDishModal').addEventListener('click', function(e){
+    if(e.target === this){
+      closeAddDishForm();
+    }
+  });
+})();
+>>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
+</script>
+{% endblock %}
+
