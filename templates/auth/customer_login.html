@@ -132,14 +132,11 @@
       <input id="password" type="password" class="form-input" placeholder="Enter your password" required>
     </div>
 
-<<<<<<< HEAD
     <div class="form-group" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
       <input type="checkbox" id="rememberMe" style="width:18px;height:18px;cursor:pointer;">
       <label for="rememberMe" style="margin:0;font-weight:500;font-size:0.95em;color:#64748b;cursor:pointer;">Keep me logged in</label>
     </div>
 
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
     <button type="submit" class="btn-login">Login to Account</button>
   </form>
 
@@ -161,18 +158,11 @@ async function doLogin(e){
   }
   
   try {
-<<<<<<< HEAD
     const rememberMe = document.getElementById('rememberMe').checked;
     const r = await fetch('/api/auth/login', { 
       method:'POST', 
       headers:{'Content-Type':'application/json'}, 
       body: JSON.stringify({ email, password, remember_me: rememberMe }) 
-=======
-    const r = await fetch('/api/auth/login', { 
-      method:'POST', 
-      headers:{'Content-Type':'application/json'}, 
-      body: JSON.stringify({ email, password }) 
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
     });
     const j = await r.json();
     

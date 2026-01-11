@@ -208,10 +208,7 @@ body { background:var(--bg); color:var(--text); -webkit-font-smoothing:antialias
   .sidebar { transform:translateX(-100%); }
   .content-wrap { margin-left:0; }
 }
-<<<<<<< HEAD
 
 /* Force black text for profile dropdown links */
 #profileDropdown a { color:#000 !important; }
 #profileDropdown a:hover { color:#000 !important; }
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87

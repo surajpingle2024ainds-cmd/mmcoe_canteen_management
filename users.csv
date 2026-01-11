@@ -2,8 +2,4 @@ id,name,email,phone,college_id,role
 1,Test Customer,customer@test.com,9999999999,CUST001,customer
 2,Admin Owner,owner@test.com,8888888888,owner,owner
 3,Kitchen Staff,kitchen@test.com,7777777777,kitchen,kitchen
-<<<<<<< HEAD
 4,suraj pingle,suraj@gmail.com,9876543210,B24AD1101,customer
-=======
-4,suraj pingle,suraj@gmail.com,9876543210,B24AD1103,customer
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87

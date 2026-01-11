@@ -29,12 +29,7 @@ def get_all_menu_items():
             'description': item.description,
             'category': item.category,
             'available': item.available,
-<<<<<<< HEAD
             'tags': item.tags
-=======
-            'tags': item.tags,
-            'image_url': item.image_url if hasattr(item, 'image_url') else None
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         } for item in items]), 200
         
     except Exception as e:
@@ -58,12 +53,7 @@ def add_menu_item():
             description=data.get('description', ''),
             category=data.get('category', 'General'),
             available=data.get('available', True),
-<<<<<<< HEAD
             tags=data.get('tags', '')
-=======
-            tags=data.get('tags', ''),
-            image_url=data.get('image_url', None)
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         )
         
         db.session.add(item)
@@ -109,11 +99,6 @@ def update_menu_item(item_id):
             item.available = data['available']
         if 'tags' in data:
             item.tags = data['tags']
-<<<<<<< HEAD
-=======
-        if 'image_url' in data:
-            item.image_url = data['image_url']
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         
         db.session.commit()
         

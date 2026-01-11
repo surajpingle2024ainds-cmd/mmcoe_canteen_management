@@ -18,10 +18,7 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_vip = db.Column(db.Boolean, default=False)
     is_blocked = db.Column(db.Boolean, default=False)
-<<<<<<< HEAD
     wallet_balance = db.Column(db.Float, default=0.0)  # Wallet balance for refunds
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
 
 class MenuItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -32,11 +29,7 @@ class MenuItem(db.Model):
     category = db.Column(db.String(50), nullable=False)
     available = db.Column(db.Boolean, default=True)
     tags = db.Column(db.String(200))
-<<<<<<< HEAD
     image_url = db.Column(db.String(500), nullable=True)  # Image URL for menu items
-=======
-    image_url = db.Column(db.String(500), nullable=True)  # URL to uploaded image
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
 
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -203,10 +196,7 @@ class Combo(db.Model):
     price = db.Column(db.Float, nullable=False)
     icon = db.Column(db.String(10), default='🍱')
     available = db.Column(db.Boolean, default=True)
-<<<<<<< HEAD
     image_url = db.Column(db.String(500), nullable=True)  # Image URL for combos
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
     items = db.relationship('ComboItem', backref='combo', cascade='all, delete-orphan')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

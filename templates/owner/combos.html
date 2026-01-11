@@ -31,7 +31,6 @@
                 <input type="text" id="comboIcon" placeholder="e.g., 🍱" maxlength="2" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
             </div>
             <div>
-<<<<<<< HEAD
                 <label style="display:block;margin-bottom:6px;font-weight:700">Image</label>
                 <input type="file" id="comboImage" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" onchange="handleComboImagePreview(event)" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
                 <div id="comboImagePreview" style="margin-top:10px;display:none">
@@ -39,8 +38,6 @@
                 </div>
             </div>
             <div>
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
                 <label style="display:block;margin-bottom:6px;font-weight:700">Add Menu Items to Combo</label>
                 <div id="comboItemsList" style="border:2px solid #e5e7eb;border-radius:8px;padding:12px;min-height:100px;max-height:300px;overflow-y:auto;background:#f8fafc">
                     <div class="muted">Loading menu items...</div>
@@ -194,18 +191,14 @@
     document.getElementById('comboDescription').value = '';
     document.getElementById('comboPrice').value = '';
     document.getElementById('comboIcon').value = '🍱';
-<<<<<<< HEAD
     document.getElementById('comboImage').value = '';
     const preview = document.getElementById('comboImagePreview');
     if(preview) preview.style.display = 'none';
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
     loadMenuItems();
     updateSelectedItems();
     document.getElementById('comboModal').style.display = 'flex';
   };
   
-<<<<<<< HEAD
   window.handleComboImagePreview = function(event){
     const file = event.target.files[0];
     if(file){
@@ -222,8 +215,6 @@
     }
   };
   
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
   window.closeComboModal = function(){
     document.getElementById('comboModal').style.display = 'none';
   };
@@ -233,10 +224,7 @@
     const price = parseFloat(document.getElementById('comboPrice').value);
     const description = document.getElementById('comboDescription').value.trim();
     const icon = document.getElementById('comboIcon').value.trim() || '🍱';
-<<<<<<< HEAD
     const imageFile = document.getElementById('comboImage').files[0];
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
     const items = selectedItems.filter(function(s){ return s.quantity > 0; });
     
     if(!name || !price || price <= 0 || !items.length){
@@ -245,7 +233,6 @@
     }
     
     try{
-<<<<<<< HEAD
       let imageUrl = '';
       
       // If editing and no new image selected, preserve existing image
@@ -283,17 +270,12 @@
         }
       }
       
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
       const data = {
         name: name,
         price: price,
         description: description,
         icon: icon,
-<<<<<<< HEAD
         image_url: imageUrl,
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         items: items,
         available: true
       };
@@ -338,7 +320,6 @@
         document.getElementById('comboDescription').value = combo.description || '';
         document.getElementById('comboPrice').value = combo.price;
         document.getElementById('comboIcon').value = combo.icon || '🍱';
-<<<<<<< HEAD
         document.getElementById('comboImage').value = '';
         selectedItems = combo.items.map(function(i){ return { menu_item_id: i.id, quantity: i.quantity }; });
         // Show existing image if available
@@ -353,9 +334,6 @@
           const preview = document.getElementById('comboImagePreview');
           if(preview) preview.style.display = 'none';
         }
-=======
-        selectedItems = combo.items.map(function(i){ return { menu_item_id: i.id, quantity: i.quantity }; });
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         loadMenuItems();
         updateSelectedItems();
         document.getElementById('comboModal').style.display = 'flex';

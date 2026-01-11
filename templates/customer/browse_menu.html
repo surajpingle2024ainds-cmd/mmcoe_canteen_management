@@ -46,7 +46,6 @@
         const btn=document.getElementById('btn_'+item.id); 
         if(btn){ 
           const t=btn.textContent; 
-<<<<<<< HEAD
           const prevBg = btn.style.background; 
           const prevColor = btn.style.color;
           btn.textContent='✓ Added to Cart'; 
@@ -59,12 +58,6 @@
             btn.style.color=prevColor;
             btn.style.fontWeight='';
           }, 2000); 
-=======
-          btn.textContent='✓ Added'; 
-          const prevBg = btn.style.background; 
-          btn.style.background='#22c55e'; 
-          setTimeout(function(){ btn.textContent=t; btn.style.background=prevBg; }, 800); 
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         } 
       }
       function render(list){ 
@@ -73,7 +66,6 @@
           empty.style.display='block'; 
           return; 
         } 
-<<<<<<< HEAD
         empty.style.display='none'; 
         grid.innerHTML = list.map(function(i){
           var imageHtml = '';
@@ -83,17 +75,6 @@
           var fallbackHtml = '<div class="menu-head" style="' + (i.image_url && i.image_url.trim() ? 'display:none;' : '') + '">' + (i.icon||'🍽️') + '</div>';
           return '<div class="menu-card"><div style="position:relative;width:100%;height:220px;background:#f0f0f0;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:center;overflow:hidden">' + imageHtml + fallbackHtml + '</div><div style="padding:14px"><div style="font-weight:800;margin-top:6px">' + i.name + '</div><div style="color:#64748b;font-size:.85em;margin-top:2px">' + (i.category||'') + '</div><div class="menu-price" style="margin:6px 0">₹' + i.price + '</div><button id="btn_' + i.id + '" class="btn add-cart-btn" data-item-id="' + i.id + '">Add to Cart</button></div></div>';
         }).join(''); 
-=======
-        empty.style.display='none';
-        grid.innerHTML = list.map(function(i){
-          var imgHtml = '';
-          if(i.image_url){
-            imgHtml = '<img src="' + i.image_url + '" alt="' + (i.name||'') + '" style="width:100%;height:220px;object-fit:cover;border-radius:12px 12px 0 0;display:block" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">';
-          }
-          var iconFallback = '<div class="menu-head" style="display:' + (i.image_url ? 'none' : 'flex') + '">' + (i.icon||'🍽️') + '</div>';
-          return '<div class="menu-card" style="overflow:hidden">' + imgHtml + iconFallback + '<div style="padding:14px"><div style="font-weight:800;margin-top:6px">' + i.name + '</div><div style="color:#64748b;font-size:.85em;margin-top:2px">' + (i.category||'') + '</div><div class="menu-price" style="margin:6px 0">₹' + i.price + '</div><button id="btn_' + i.id + '" class="btn add-cart-btn" data-item-id="' + i.id + '">Add to Cart</button></div></div>';
-        }).join('');
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         
         grid.querySelectorAll('.add-cart-btn').forEach(function(btn){
           btn.addEventListener('click', function(){
@@ -163,7 +144,6 @@
                 combo.items.map(function(item){ return item.icon + ' ' + item.name + ' (x' + (item.quantity||1) + ')'; }).join(', ') + 
                 '</div>';
             }
-<<<<<<< HEAD
             var imageHtml = '';
             if(combo.image_url && String(combo.image_url).trim()){
               imageHtml = '<img src="' + combo.image_url + '" alt="' + (combo.name||'') + '" style="width:100%;height:220px;object-fit:cover;border-radius:8px 8px 0 0;" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">';
@@ -180,9 +160,6 @@
               +   '<button id="combo_btn_' + combo.id + '" class="btn add-combo-btn" data-combo-id="' + combo.id + '" style="background:linear-gradient(135deg, #FF6B6B, #FFB347)">Add Combo</button>'
               + '</div>'
             + '</div>';
-=======
-            return '<div class="menu-card" style="border:2px solid #FF6B6B;position:relative"><div style="position:absolute;top:8px;right:8px;background:#FF6B6B;color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700">COMBO</div><div class="menu-head">' + (combo.icon||'🍱') + '</div><div style="padding:14px"><div style="font-weight:800;margin-top:6px">' + combo.name + '</div><div style="color:#64748b;font-size:.85em;margin-top:2px">' + (combo.description||'Special combo deal') + '</div>' + itemsList + '<div class="menu-price" style="margin:6px 0;color:#FF6B6B">₹' + combo.price + '</div><button id="combo_btn_' + combo.id + '" class="btn add-combo-btn" data-combo-id="' + combo.id + '" style="background:linear-gradient(135deg, #FF6B6B, #FFB347)">Add Combo</button></div></div>';
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
           }).join('');
           
           combosGrid.querySelectorAll('.add-combo-btn').forEach(function(btn){
@@ -215,20 +192,10 @@
       
       // Auto-refresh every 30 seconds for new combos and menu items
       setInterval(function(){
-<<<<<<< HEAD
-=======
-        loadCombos();
-        loadMenuItems();
-      }, 30000); // 30 seconds
-      
-      // Auto-refresh page every 5 minutes (300000ms) to show latest menu updates
-      setInterval(function(){
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         if(document.visibilityState === 'visible'){
           loadCombos();
           loadMenuItems();
         }
-<<<<<<< HEAD
       }, 30000); // 30 seconds
       
       // Full refresh every 5 minutes when page is visible
@@ -236,8 +203,6 @@
         if(document.visibilityState === 'visible'){
           location.reload();
         }
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
       }, 300000); // 5 minutes
       
       search.addEventListener('input', function(){ render(getFiltered()); });

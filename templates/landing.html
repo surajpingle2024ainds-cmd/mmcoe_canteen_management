@@ -725,13 +725,10 @@
                 <div id="loginAlert"></div>
                 <div class="form-group"><label>Email / College ID</label><input type="text" id="loginEmail" placeholder="Enter email or college ID"></div>
                 <div class="form-group"><label>Password</label><input type="password" id="loginPassword" placeholder="Enter password"></div>
-<<<<<<< HEAD
                 <div class="form-group" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
                     <input type="checkbox" id="loginRememberMe" style="width:18px;height:18px;cursor:pointer;">
                     <label for="loginRememberMe" style="margin:0;font-weight:500;font-size:0.9em;color:#64748b;cursor:pointer;">Keep me logged in</label>
                 </div>
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
                 <button class="btn-submit" id="loginButton" onclick="window.handleLogin()">Login</button>
             </div>
         </div>
@@ -972,18 +969,11 @@
                     sendPass = 'pass123'; 
                 } 
                 
-<<<<<<< HEAD
                 const rememberMe = document.getElementById('loginRememberMe') ? document.getElementById('loginRememberMe').checked : false;
                 const resp = await fetch('/api/auth/login', {
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
                     body: JSON.stringify({email: sendEmail, password: sendPass, remember_me: rememberMe})
-=======
-                const resp = await fetch('/api/auth/login', {
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({email: sendEmail, password: sendPass})
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
                 }); 
                 const res = await resp.json(); 
                 

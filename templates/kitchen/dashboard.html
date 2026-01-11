@@ -69,6 +69,34 @@
     }catch(e){ var el=document.getElementById('k_rows'); if(el) el.textContent='Failed to load.'; }
   }
   load(); setInterval(load, 8000);
+  
+  // Initialize voice announcement for new orders
+  if (typeof window.waitForVoiceAssistant === 'function') {
+    window.waitForVoiceAssistant(() => {
+    if (kitchenVoiceAssistant && kitchenVoiceAssistant.isEnabled) {
+      setInterval(() => {
+        if (kitchenVoiceAssistant && kitchenVoiceAssistant.isEnabled) {
+          kitchenVoiceAssistant.checkForNewOrders();
+        }
+      }, 5000);
+    }
+    });
+  } else {
+    // Fallback: try after a delay
+    setTimeout(() => {
+      if (typeof window.waitForVoiceAssistant === 'function') {
+        window.waitForVoiceAssistant(() => {
+          if (kitchenVoiceAssistant && kitchenVoiceAssistant.isEnabled) {
+            setInterval(() => {
+              if (kitchenVoiceAssistant && kitchenVoiceAssistant.isEnabled) {
+                kitchenVoiceAssistant.checkForNewOrders();
+              }
+            }, 5000);
+          }
+        });
+      }
+    }, 1000);
+  }
 })();
 </script>
 {% endblock %}

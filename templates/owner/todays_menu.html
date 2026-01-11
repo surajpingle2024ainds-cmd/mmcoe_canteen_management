@@ -4,7 +4,6 @@
 <div class="card">
     <h2 class="section-title">🍽️ Manage Today's Menu</h2>
     <p style="color:#64748b;margin-bottom:20px">Toggle availability of menu items for today</p>
-<<<<<<< HEAD
     <div style="margin-bottom:20px">
         <button class="btn" onclick="selectAll()">Select All</button>
         <button class="btn ghost" onclick="deselectAll()">Deselect All</button>
@@ -50,62 +49,10 @@
                 <button type="button" class="btn ghost" onclick="closeAddDishModal()" style="flex:1">Cancel</button>
             </div>
         </form>
-=======
-    <div style="margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-        <button class="btn" onclick="selectAll()">Select All</button>
-        <button class="btn ghost" onclick="deselectAll()">Deselect All</button>
-        <button class="btn" onclick="showAddDishForm()" style="background:linear-gradient(135deg, #22c55e, #16a34a);color:#fff">➕ Add New Dish</button>
-    </div>
-    <div id="menuRoot">Loading menu...</div>
-    
-    <!-- Add Dish Modal -->
-    <div id="addDishModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center">
-        <div style="background:#fff;padding:30px;border-radius:16px;max-width:600px;width:90%;max-height:90vh;overflow-y:auto">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-                <h3 style="margin:0">Add New Dish</h3>
-                <button onclick="closeAddDishForm()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#64748b">&times;</button>
-            </div>
-            <form id="addDishForm" style="display:flex;flex-direction:column;gap:16px">
-                <div>
-                    <label style="display:block;margin-bottom:6px;font-weight:700">Dish Name *</label>
-                    <input type="text" id="dishName" required style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
-                </div>
-                <div>
-                    <label style="display:block;margin-bottom:6px;font-weight:700">Price (₹) *</label>
-                    <input type="number" id="dishPrice" required min="0" step="0.01" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
-                </div>
-                <div>
-                    <label style="display:block;margin-bottom:6px;font-weight:700">Category *</label>
-                    <input type="text" id="dishCategory" required placeholder="e.g., Beverages, Snacks, Main Course" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
-                </div>
-                <div>
-                    <label style="display:block;margin-bottom:6px;font-weight:700">Description</label>
-                    <textarea id="dishDescription" placeholder="Optional description" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;min-height:60px"></textarea>
-                </div>
-                <div>
-                    <label style="display:block;margin-bottom:6px;font-weight:700">Icon (Emoji)</label>
-                    <input type="text" id="dishIcon" placeholder="🍽️" maxlength="2" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
-                </div>
-                <div>
-                    <label style="display:block;margin-bottom:6px;font-weight:700">Dish Photo</label>
-                    <input type="file" id="dishImage" accept="image/*" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
-                    <div id="imagePreview" style="margin-top:10px;display:none">
-                        <img id="previewImg" src="" alt="Preview" style="max-width:200px;max-height:200px;border-radius:8px;object-fit:cover" />
-                    </div>
-                    <div id="imageUploadStatus" style="margin-top:8px;font-size:14px;color:#64748b"></div>
-                </div>
-                <div style="display:flex;gap:12px;margin-top:10px">
-                    <button type="submit" class="btn" style="flex:1">Add Dish</button>
-                    <button type="button" class="btn ghost" onclick="closeAddDishForm()">Cancel</button>
-                </div>
-            </form>
-        </div>
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
     </div>
 </div>
 
 <script>
-<<<<<<< HEAD
 // Make loadMenu globally accessible
 window.loadMenu = null;
 
@@ -113,12 +60,6 @@ window.loadMenu = null;
   const token = localStorage.getItem('authToken') || '';
   
   async function loadMenuFunc(){
-=======
-(async function(){
-  const token = localStorage.getItem('authToken') || '';
-  
-  async function loadMenu(){
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
     try{
       const res = await fetch('/api/menu/all');
       const list = await res.json();
@@ -214,7 +155,6 @@ window.loadMenu = null;
     });
   };
   
-<<<<<<< HEAD
   // Assign to global scope
   window.loadMenu = loadMenuFunc;
   
@@ -354,116 +294,6 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 });
-=======
-  loadMenu();
-  // Refresh every 30 seconds to show updates
-  setInterval(loadMenu, 30000);
-  
-  // Image preview
-  const dishImage = document.getElementById('dishImage');
-  if(dishImage){
-    dishImage.addEventListener('change', function(e){
-      const file = e.target.files[0];
-      if(file){
-        const reader = new FileReader();
-        reader.onload = function(e){
-          document.getElementById('previewImg').src = e.target.result;
-          document.getElementById('imagePreview').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-  }
-  
-  // Add Dish Form
-  window.showAddDishForm = function(){
-    document.getElementById('addDishModal').style.display = 'flex';
-  };
-  
-  window.closeAddDishForm = function(){
-    document.getElementById('addDishModal').style.display = 'none';
-    document.getElementById('addDishForm').reset();
-    document.getElementById('imagePreview').style.display = 'none';
-    document.getElementById('imageUploadStatus').textContent = '';
-  };
-  
-  document.getElementById('addDishForm').addEventListener('submit', async function(e){
-    e.preventDefault();
-    const statusDiv = document.getElementById('imageUploadStatus');
-    statusDiv.textContent = 'Uploading...';
-    statusDiv.style.color = '#64748b';
-    
-    try{
-      let imageUrl = null;
-      
-      // Upload image if provided
-      const imageFile = document.getElementById('dishImage').files[0];
-      if(imageFile){
-        const formData = new FormData();
-        formData.append('file', imageFile);
-        
-        const uploadRes = await fetch('/api/upload/image', {
-          method: 'POST',
-          headers: {
-            'Authorization': token ? 'Bearer ' + token : ''
-          },
-          body: formData
-        });
-        
-        if(!uploadRes.ok){
-          throw new Error('Image upload failed');
-        }
-        
-        const uploadData = await uploadRes.json();
-        imageUrl = uploadData.image_url;
-        statusDiv.textContent = 'Image uploaded ✓';
-        statusDiv.style.color = '#22c55e';
-      }
-      
-      // Create menu item
-      const itemData = {
-        name: document.getElementById('dishName').value,
-        price: parseFloat(document.getElementById('dishPrice').value),
-        category: document.getElementById('dishCategory').value,
-        description: document.getElementById('dishDescription').value || '',
-        icon: document.getElementById('dishIcon').value || '🍽️',
-        available: true,
-        tags: '',
-        image_url: imageUrl
-      };
-      
-      const res = await fetch('/api/owner/menu/items', {
-        method: 'POST',
-        headers: {
-          'Authorization': token ? 'Bearer ' + token : '',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(itemData)
-      });
-      
-      if(!res.ok){
-        const error = await res.json().catch(() => ({error: 'Failed to create dish'}));
-        throw new Error(error.error || 'Failed to create dish');
-      }
-      
-      alert('Dish added successfully!');
-      closeAddDishForm();
-      loadMenu();
-    }catch(e){
-      statusDiv.textContent = 'Error: ' + e.message;
-      statusDiv.style.color = '#ef4444';
-      console.error(e);
-    }
-  });
-  
-  // Close modal on outside click
-  document.getElementById('addDishModal').addEventListener('click', function(e){
-    if(e.target === this){
-      closeAddDishForm();
-    }
-  });
-})();
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
 </script>
 {% endblock %}
 

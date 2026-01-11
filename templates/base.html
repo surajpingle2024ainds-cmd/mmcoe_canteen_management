@@ -71,7 +71,6 @@
                 <span id="cartTotalBadge" style="margin-left:8px;color:#cbd5e1;font-weight:600;display:none">₹0</span>
             </a>
             <button id="darkModeToggleBtn" onclick="toggleDarkModeGlobal()" style="background:transparent;border:1px solid rgba(255,255,255,0.3);color:#e5e7eb;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:18px" title="Toggle Dark Mode">🌙</button>
-<<<<<<< HEAD
             <!-- Profile Avatar Dropdown -->
             <div id="profileDropdownContainer" style="position:relative;display:none">
                 <button id="profileAvatarBtn" onclick="toggleProfileDropdown()" style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg, #667eea, #764ba2);color:#fff;border:none;font-weight:700;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.2)">?</button>
@@ -85,27 +84,10 @@
                 </div>
             </div>
             <a href="/logout" class="logout-btn" style="display:none">Logout</a>
-=======
-            
-            {% include 'components/profile_menu.html' %}
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         </div>
     </div>
     <div class="layout">
         <aside id="sidebar" class="sidebar">
-<<<<<<< HEAD
-=======
-            <div id="sideUserMenu" style="position:relative;display:none;margin:0 4px 12px 4px">
-                <button id="sideUserMenuBtn" style="width:100%;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.25);color:#e5e7eb;padding:8px 12px;border-radius:999px;cursor:pointer;font-weight:700;justify-content:flex-start">
-                    <span id="sideUserAvatar" style="background:#22c55e;color:#0b1020;width:34px;height:34px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-weight:800">U</span>
-                    <span id="sideUserNameLabel" style="display:none">User</span>
-                </button>
-                <div id="sideUserDropdown" style="display:none;position:absolute;left:0;top:44px;background:#111827;color:#e5e7eb;border:1px solid #1f2937;border-radius:10px;min-width:100%;box-shadow:0 10px 24px rgba(0,0,0,.35);z-index:10001">
-                    <div id="sideUserNameItem" style="padding:10px 14px;color:#e5e7eb;font-weight:800;border-bottom:1px solid #1f2937;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">User</div>
-                    <a href="/logout" class="logout-btn" style="padding:10px 14px;text-decoration:none;color:#ef4444;display:block">Logout</a>
-                </div>
-            </div>
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
             <div class="group-title">Navigation</div>
             {% block sidenav %}
             <a class="side-link" href="/login/customer">Customer Login</a>
@@ -128,25 +110,14 @@
       // Clear local session on logout click before server redirect
       var outs = document.querySelectorAll('.logout-btn');
       outs.forEach(function(a){ a.addEventListener('click', function(){ try{ localStorage.clear(); }catch(e){} }); });
-<<<<<<< HEAD
-=======
-
-      
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
       var hasAuth = false;
       var isCustomer = false;
       var isOwner = false;
       var isKitchen = false;
-<<<<<<< HEAD
       var token = localStorage.getItem('authToken') || '';
       try {
         var cu = localStorage.getItem('currentUser');
         hasAuth = !!token || !!cu;
-=======
-      try {
-        var cu = localStorage.getItem('currentUser');
-        hasAuth = !!localStorage.getItem('authToken') || !!cu;
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         if (cu) { 
           var obj = JSON.parse(cu); 
           isCustomer = (obj && obj.role === 'customer'); 
@@ -154,13 +125,6 @@
           isKitchen = (obj && obj.role === 'kitchen');
         }
       } catch(e) {}
-<<<<<<< HEAD
-=======
-      try {
-        var onProtected = /^\/(customer|owner|kitchen)\//.test(location.pathname);
-        if (onProtected) { hasAuth = true; }
-      } catch(e) {}
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
       outs.forEach(function(a){ a.style.display = hasAuth ? '' : 'none'; });
       var prof = document.getElementById('topProfileLink');
       if (prof) prof.style.display = isCustomer ? '' : 'none';
@@ -169,7 +133,6 @@
       if (bell) bell.style.display = (isCustomer || isOwner || isKitchen) ? '' : 'none';
       var topCart = document.getElementById('topCartLink');
       if (topCart) topCart.style.display = isCustomer ? '' : 'none';
-<<<<<<< HEAD
       
       // Profile Avatar Dropdown
       var profileDropdownContainer = document.getElementById('profileDropdownContainer');
@@ -296,114 +259,6 @@
         window.location.href = '/logout';
       };
       
-=======
-      // User dropdown (username + logout) - topbar and sidebar
-      try {
-        var userMenu = document.getElementById('userMenu');
-        var userMenuBtn = document.getElementById('userMenuBtn');
-        var userDropdown = document.getElementById('userDropdown');
-        var userNameLabel = document.getElementById('userNameLabel');
-        var userAvatar = document.getElementById('userAvatar');
-        var userAvatarImg = document.getElementById('userAvatarImg');
-        var dropdownUserName = document.getElementById('dropdownUserName');
-        var dropdownUserEmail = document.getElementById('dropdownUserEmail');
-        var dropdownProfile = document.getElementById('dropdownProfile');
-        var sideUserMenu = document.getElementById('sideUserMenu');
-        var sideUserMenuBtn = document.getElementById('sideUserMenuBtn');
-        var sideUserDropdown = document.getElementById('sideUserDropdown');
-        var sideUserNameLabel = document.getElementById('sideUserNameLabel');
-        var sideUserAvatar = document.getElementById('sideUserAvatar');
-        if (userMenu) {
-            var displayName = 'User';
-            var initials = 'U';
-            var emailVal = '';
-            var avatarUrl = '';
-            try {
-              if (cu) {
-                var uo = JSON.parse(cu);
-                if (uo && uo.name) {
-                  displayName = uo.name;
-                  var parts = String(uo.name).trim().split(/\s+/);
-                  initials = (parts[0] ? parts[0][0] : 'U');
-                } else if (uo && uo.email) {
-                  displayName = uo.email;
-                  initials = String(uo.email)[0] || 'U';
-                }
-                if (uo && uo.email) { emailVal = uo.email; }
-                if (uo && (uo.profile_image_url || uo.avatarUrl || uo.avatar)) {
-                  avatarUrl = uo.profile_image_url || uo.avatarUrl || uo.avatar;
-                }
-              }
-            } catch(e) {}
-            if (userAvatar) userAvatar.textContent = String(initials).toUpperCase();
-            if (dropdownUserName) dropdownUserName.textContent = displayName;
-            if (dropdownUserEmail) dropdownUserEmail.textContent = emailVal || '';
-            if (userAvatarImg) {
-              if (avatarUrl) {
-                userAvatarImg.src = avatarUrl;
-                userAvatarImg.style.display = 'inline-block';
-                if (userAvatar) userAvatar.style.display = 'none';
-              } else {
-                userAvatarImg.style.display = 'none';
-                if (userAvatar) userAvatar.style.display = 'inline-flex';
-              }
-            }
-            if (dropdownProfile) dropdownProfile.style.display = 'none';
-            userMenu.style.display = 'block';
-        } else {
-            userMenu.style.display = 'none';
-        }
-        if (sideUserMenu) {
-          if (hasAuth) {
-            var displayName2 = 'User';
-            var initials2 = 'U';
-            try {
-              if (cu) {
-                var uo2 = JSON.parse(cu);
-                if (uo2 && uo2.name) {
-                  displayName2 = uo2.name;
-                  var parts2 = String(uo2.name).trim().split(/\s+/);
-                  initials2 = (parts2[0] ? parts2[0][0] : 'U');
-                } else if (uo2 && uo2.email) {
-                  displayName2 = uo2.email;
-                  initials2 = String(uo2.email)[0] || 'U';
-                }
-              }
-            } catch(e) {}
-            if (sideUserNameLabel) sideUserNameLabel.textContent = displayName2;
-            if (sideUserAvatar) sideUserAvatar.textContent = String(initials2).toUpperCase();
-            sideUserMenu.style.display = '';
-          } else {
-            sideUserMenu.style.display = 'none';
-          }
-        }
-        // Toggle dropdown open/close
-        if (userMenuBtn && userDropdown) {
-          userMenuBtn.addEventListener('click', function(e){
-            e.stopPropagation();
-            userDropdown.style.display = (userDropdown.style.display==='block') ? 'none' : 'block';
-          });
-          document.addEventListener('click', function(e){
-            if (userDropdown && userDropdown.style.display==='block') {
-              var inside = userMenu.contains(e.target);
-              if (!inside) userDropdown.style.display='none';
-            }
-          });
-        }
-        if (sideUserMenuBtn && sideUserDropdown) {
-          sideUserMenuBtn.addEventListener('click', function(e){
-            e.stopPropagation();
-            sideUserDropdown.style.display = (sideUserDropdown.style.display==='block') ? 'none' : 'block';
-          });
-          document.addEventListener('click', function(e){
-            if (sideUserDropdown && sideUserDropdown.style.display==='block') {
-              var inside2 = sideUserMenu.contains(e.target);
-              if (!inside2) sideUserDropdown.style.display='none';
-            }
-          });
-        }
-      } catch(e) {}
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
       if(btn && sb && cw){
         btn.addEventListener('click', function(){
           var collapsed = sb.classList.toggle('collapsed');

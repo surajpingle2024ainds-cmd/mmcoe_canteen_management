@@ -40,19 +40,12 @@ demo_payments = {}
 
 # ==================== HELPER FUNCTIONS ====================
 
-<<<<<<< HEAD
 def generate_token(user_id, remember_me=False):
     # If remember_me is True, token expires in 30 days, otherwise 7 days
     days = 30 if remember_me else 7
     payload = {
         'user_id': user_id,
         'exp': datetime.utcnow() + timedelta(days=days)
-=======
-def generate_token(user_id):
-    payload = {
-        'user_id': user_id,
-        'exp': datetime.utcnow() + timedelta(days=7)
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
     }
     return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
 
@@ -316,13 +309,9 @@ def login():
         if not check_password_hash(user.password, data['password']):
             return jsonify({'error': 'Invalid credentials'}), 401
         
-<<<<<<< HEAD
         # Check if user wants to stay logged in
         remember_me = bool(data.get('remember_me', False))
         token = generate_token(user.id, remember_me=remember_me)
-=======
-        token = generate_token(user.id)
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         
         print(f"\n✅ USER LOGIN")
         print(f"   Name: {user.name}")
@@ -365,11 +354,7 @@ def get_all_menu():
             'category': item.category,
             'available': item.available,
             'tags': item.tags,
-<<<<<<< HEAD
             'image_url': item.image_url or ''
-=======
-            'image_url': item.image_url if hasattr(item, 'image_url') else None
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         } for item in items]), 200
     except Exception as e:
         print(f"Menu Error: {e}")
@@ -411,11 +396,7 @@ def get_today_menu():
                 'desc': item.description,
                 'category': item.category,
                 'tags': item.tags,
-<<<<<<< HEAD
                 'image_url': item.image_url or ''
-=======
-                'image_url': item.image_url if hasattr(item, 'image_url') else None
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
             })
         
         return jsonify(result), 200
@@ -444,7 +425,6 @@ def create_order():
         while Order.query.filter_by(order_id=order_id).first():
             order_id = f"ORD{int(datetime.utcnow().timestamp())}{random.randint(100,999)}"
         
-<<<<<<< HEAD
         # Calculate total from items and combos (respect active offer discounts and combos added as items)
         calculated_total = 0.0
         # Determine active offer discount percent (replicates logic from get_today_menu)
@@ -491,27 +471,12 @@ def create_order():
             combo = Combo.query.get(combo_data.get('id'))
             if combo and combo.available:
                 calculated_total += float(combo.price) * int(combo_data.get('quantity', 1))
-=======
-        # Calculate total from items and combos
-        calculated_total = 0.0
-        # Add items total
-        for item in data.get('items', []):
-            menu_item = MenuItem.query.get(item['id'])
-            if menu_item:
-                calculated_total += menu_item.price * item.get('quantity', 1)
-        # Add combos total
-        for combo_data in data.get('combos', []):
-            combo = Combo.query.get(combo_data.get('id'))
-            if combo and combo.available:
-                calculated_total += combo.price * combo_data.get('quantity', 1)
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         
         # Use provided total if it matches calculated (allows for discounts), otherwise use calculated
         provided_total = float(data.get('total', 0))
         if provided_total > 0 and abs(provided_total - calculated_total) < 0.01:
             calculated_total = provided_total
         
-<<<<<<< HEAD
         # Handle wallet payment
         payment_method = data.get('payment_method', 'online')
         transaction_id = data.get('transaction_id', 'DEMO-TXN')
@@ -529,19 +494,13 @@ def create_order():
             transaction_id = 'WALLET'
             print(f"Payment via wallet: ₹{calculated_total} deducted. Remaining balance: ₹{user.wallet_balance}")
         
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         order = Order(
             order_id=order_id,
             user_id=user.id,
             customer_name=user.name,
             customer_phone=user.phone,
             total_amount=calculated_total,
-<<<<<<< HEAD
             transaction_id=transaction_id,
-=======
-            transaction_id=data.get('transaction_id', 'DEMO-TXN'),
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
             status='pending'
         )
         
@@ -551,7 +510,6 @@ def create_order():
         # Add order items (support both regular items and combos)
         order_items_data = []
         
-<<<<<<< HEAD
         # Handle regular menu items (apply the same discount to captured unit price)
         for item in data.get('items', []):
             item_id = item.get('id')
@@ -569,24 +527,12 @@ def create_order():
                     menu_item_id=menu_item.id,
                     quantity=qty,
                     price=unit_price
-=======
-        # Handle regular menu items
-        for item in data.get('items', []):
-            menu_item = MenuItem.query.get(item['id'])
-            if menu_item:
-                order_item = OrderItem(
-                    order_id=order.id,
-                    menu_item_id=menu_item.id,
-                    quantity=item['quantity'],
-                    price=menu_item.price
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
                 )
                 db.session.add(order_item)
                 order_items_data.append({
                     'id': menu_item.id,
                     'name': menu_item.name,
                     'icon': menu_item.icon,
-<<<<<<< HEAD
                     'quantity': qty,
                     'price': unit_price
                 })
@@ -594,14 +540,6 @@ def create_order():
         # Handle combo items (from explicit combos + inferred combos from items)
         effective_combos = list(data.get('combos', [])) + inferred_combos
         for combo_data in effective_combos:
-=======
-                    'quantity': item['quantity'],
-                    'price': menu_item.price
-                })
-        
-        # Handle combo items
-        for combo_data in data.get('combos', []):
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
             combo = Combo.query.get(combo_data.get('id'))
             if combo and combo.available:
                 # Add combo items to order
@@ -611,11 +549,7 @@ def create_order():
                         order_item = OrderItem(
                             order_id=order.id,
                             menu_item_id=menu_item.id,
-<<<<<<< HEAD
                             quantity=combo_item.quantity * int(combo_data.get('quantity', 1)),
-=======
-                            quantity=combo_item.quantity * combo_data.get('quantity', 1),
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
                             price=menu_item.price
                         )
                         db.session.add(order_item)
@@ -623,11 +557,7 @@ def create_order():
                             'id': menu_item.id,
                             'name': menu_item.name,
                             'icon': menu_item.icon,
-<<<<<<< HEAD
                             'quantity': combo_item.quantity * int(combo_data.get('quantity', 1)),
-=======
-                            'quantity': combo_item.quantity * combo_data.get('quantity', 1),
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
                             'price': menu_item.price
                         })
         
@@ -647,7 +577,6 @@ def create_order():
         try:
             order_date = datetime.utcnow().date()
             order_time = datetime.utcnow()
-<<<<<<< HEAD
             # Determine payment method
             if transaction_id == 'WALLET':
                 payment_method = 'wallet'
@@ -655,9 +584,6 @@ def create_order():
                 payment_method = 'cash'
             else:
                 payment_method = 'online'
-=======
-            payment_method = 'online' if data.get('transaction_id') and data.get('transaction_id') != 'CASH' else 'cash'
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
             
             daily_log = DailyOrderLog(
                 order_id=order_id,
@@ -1128,55 +1054,6 @@ def logout_page():
     # Redirect to main app landing; client should clear session storage before navigating
     return redirect('/app')
 
-<<<<<<< HEAD
-=======
-# ==================== IMAGE UPLOAD ====================
-UPLOAD_FOLDER = 'static/images/menu'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-@app.route('/api/upload/image', methods=['POST', 'OPTIONS'])
-def upload_image():
-    if request.method == 'OPTIONS':
-        return '', 204
-    
-    try:
-        user = get_auth_user()
-        if not user or user.role != 'owner':
-            return jsonify({'error': 'Unauthorized'}), 401
-        
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        if file and allowed_file(file.filename):
-            # Create upload directory if it doesn't exist
-            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-            
-            # Generate unique filename
-            filename = str(uuid.uuid4()) + '.' + file.filename.rsplit('.', 1)[1].lower()
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-            
-            # Return URL path
-            image_url = f'/static/images/menu/{filename}'
-            return jsonify({
-                'success': True,
-                'image_url': image_url
-            }), 200
-        else:
-            return jsonify({'error': 'Invalid file type'}), 400
-            
-    except Exception as e:
-        print(f"Upload Error: {e}")
-        return jsonify({'error': str(e)}), 500
-
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
 # ==================== HEALTH ENDPOINTS ====================
 @app.route('/health', methods=['GET'])
 def health():
@@ -1532,7 +1409,6 @@ def owner_reject_order(order_id):
         order = Order.query.get(order_id)
         if not order or order.status not in ['pending','accepted']:
             return jsonify({'error': 'Order not found or cannot be rejected'}), 404
-<<<<<<< HEAD
         
         # If order was paid online (not CASH), add amount to customer's wallet
         if order.user_id and order.transaction_id and order.transaction_id != 'CASH' and order.transaction_id != 'OFFLINE':
@@ -1560,10 +1436,6 @@ def owner_reject_order(order_id):
         except Exception as e:
             print(f"Failed to send notification: {e}")
         
-=======
-        order.status = 'rejected'
-        db.session.commit()
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         export_csv()
         return jsonify({'success': True}), 200
     except Exception as e:
@@ -1655,10 +1527,7 @@ def api_user_profile():
             'year': user.year or '',
             'address': user.address or '',
             'is_vip': getattr(user, 'is_vip', False),
-<<<<<<< HEAD
             'wallet_balance': float(getattr(user, 'wallet_balance', 0.0) or 0.0),
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
             'created_at': created_at_str
         }
         
@@ -1672,7 +1541,6 @@ def api_user_profile():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-<<<<<<< HEAD
 # ==================== WALLET API ENDPOINTS ====================
 @app.route('/api/user/wallet', methods=['GET', 'OPTIONS'])
 def get_wallet_balance():
@@ -1698,8 +1566,6 @@ def get_wallet_balance():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
 @app.route('/api/feedback', methods=['POST', 'OPTIONS'])
 def api_feedback():
     if request.method == 'OPTIONS':
@@ -1792,7 +1658,6 @@ def owner_dashboard_stats():
             return jsonify({'error': 'Unauthorized'}), 401
         today = date.today()
         yesterday = today - timedelta(days=1)
-<<<<<<< HEAD
         # Include all orders (cash, online, delivered, accepted) - exclude only rejected/cancelled
         today_rev = db.session.query(func.sum(Order.total_amount)).filter(
             func.date(Order.created_at)==today,
@@ -1806,11 +1671,6 @@ def owner_dashboard_stats():
             func.date(Order.created_at)==today,
             Order.status.notin_(['rejected', 'cancelled'])
         ).count()
-=======
-        today_rev = db.session.query(func.sum(Order.total_amount)).filter(func.date(Order.created_at)==today).scalar() or 0.0
-        yesterday_rev = db.session.query(func.sum(Order.total_amount)).filter(func.date(Order.created_at)==yesterday).scalar() or 0.0
-        total_orders = Order.query.filter(func.date(Order.created_at)==today).count()
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         try:
             from models import Feedback
             today_fb = db.session.query(func.avg(Feedback.rating)).filter(func.date(Feedback.created_at)==today).scalar()
@@ -1872,7 +1732,6 @@ def owner_set_menu_availability(item_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-<<<<<<< HEAD
 # ==================== IMAGE UPLOAD ENDPOINT ====================
 @app.route('/api/upload/image', methods=['POST', 'OPTIONS'])
 def upload_image():
@@ -1982,8 +1841,6 @@ def owner_add_dish():
         print(f"Add Dish Error: {e}")
         return jsonify({'error': str(e)}), 500
 
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
 # ==================== OFFER MANAGEMENT ====================
 @app.route('/api/offers/active', methods=['GET', 'OPTIONS'])
 def get_active_offer():
@@ -2188,10 +2045,7 @@ def list_combos():
                 'description': combo.description,
                 'price': combo.price,
                 'icon': combo.icon,
-<<<<<<< HEAD
                 'image_url': combo.image_url or '',
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
                 'items': items
             })
         return jsonify(result), 200
@@ -2226,10 +2080,7 @@ def owner_list_combos():
                 'price': combo.price,
                 'icon': combo.icon,
                 'available': combo.available,
-<<<<<<< HEAD
                 'image_url': combo.image_url or '',
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
                 'items': items
             })
         return jsonify(result), 200
@@ -2259,12 +2110,8 @@ def owner_create_combo():
             description=data.get('description', '').strip(),
             price=price,
             icon=data.get('icon', '🍱'),
-<<<<<<< HEAD
             available=bool(data.get('available', True)),
             image_url=data.get('image_url', '').strip() or None
-=======
-            available=bool(data.get('available', True))
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         )
         db.session.add(combo)
         db.session.flush()
@@ -2311,11 +2158,8 @@ def owner_update_combo(combo_id):
             combo.icon = data['icon']
         if 'available' in data:
             combo.available = bool(data['available'])
-<<<<<<< HEAD
         if 'image_url' in data:
             combo.image_url = data['image_url'].strip() if data['image_url'] else None
-=======
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
         if 'items' in data:
             # Delete existing items
             ComboItem.query.filter_by(combo_id=combo.id).delete()
@@ -2785,7 +2629,6 @@ def init_db():
         # Create tables
         db.create_all()
         
-<<<<<<< HEAD
         # Add image_url column to combo table if it doesn't exist (for existing databases)
         try:
             import sqlite3
@@ -2816,24 +2659,6 @@ def init_db():
             items = [
                 MenuItem(name="Chaha", icon="🍵", price=10, description="Hot tea", category="Beverages", tags="breakfast,tea", available=True, image_url="/static/images/menu/chaha.jpg"),
                 
-=======
-        # Add menu items if empty
-        if MenuItem.query.count() == 0:
-            items = [
-                MenuItem(name="Chaha", icon="☕", price=10, description="Hot Indian tea", category="Beverages", tags="tea,breakfast", available=True, image_url="/static/images/menu/chaha.jpg"),
-                MenuItem(name="Coffee", icon="☕", price=20, description="Hot coffee", category="Beverages", tags="coffee,breakfast", available=True, image_url="/static/images/menu/coffee.jpg"),
-                MenuItem(name="Padapav", icon="🍔", price=15, description="Vada pav - popular street food", category="Street Food", tags="snack,fast-food", available=True, image_url="/static/images/menu/padapav.jpg"),
-                MenuItem(name="Samosa", icon="🥟", price=20, description="Crispy fried samosa", category="Snacks", tags="snack,vegetarian", available=True, image_url="/static/images/menu/samosa.jpg"),
-                MenuItem(name="Poha", icon="🍚", price=20, description="Flattened rice with spices", category="Breakfast", tags="breakfast,indian", available=True, image_url="/static/images/menu/poha.jpg"),
-                MenuItem(name="Upama", icon="🍲", price=20, description="Semolina upama", category="Breakfast", tags="breakfast,indian", available=True, image_url="/static/images/menu/upama.jpg"),
-                MenuItem(name="Sandwich", icon="🥪", price=100, description="Vegetable sandwich", category="Snacks", tags="lunch,snack", available=True, image_url="/static/images/menu/sandwich.jpg"),
-                MenuItem(name="Buttermilk (Tak)", icon="🥛", price=15, description="Refreshing buttermilk", category="Beverages", tags="drink,cold", available=True, image_url="/static/images/menu/buttermilk.jpg"),
-                MenuItem(name="Paratha", icon="🥞", price=60, description="Flaky Indian flatbread", category="Main Course", tags="lunch,indian", available=True, image_url="/static/images/menu/paratha.jpg"),
-                MenuItem(name="Misal", icon="🍲", price=60, description="Spicy misal pav", category="Street Food", tags="lunch,spicy", available=True, image_url="/static/images/menu/misal.jpg"),
-                MenuItem(name="Dal Khichadi", icon="🍛", price=60, description="Comforting dal and rice", category="Main Course", tags="lunch,indian", available=True, image_url="/static/images/menu/dal_khichadi.jpg"),
-                MenuItem(name="Poli Bhaji", icon="🍛", price=40, description="Indian flatbread with vegetable curry", category="Main Course", tags="lunch,indian", available=True, image_url="/static/images/menu/poli_bhaji.jpg"),
-                MenuItem(name="Shezwan Rice", icon="🍚", price=70, description="Spicy Schezwan fried rice", category="Rice", tags="lunch,spicy,chinese", available=True, image_url="/static/images/menu/shezwan_rice.jpg"),
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
             ]
             for item in items:
                 db.session.add(item)
@@ -2928,31 +2753,6 @@ if __name__ == '__main__':
     print("   - Database: SQLite (canteen.db)")
     print("="*70 + "\n")
 
-<<<<<<< HEAD
-=======
-# ==================== REGISTER NEW BLUEPRINTS ====================
-# These are ADDITIVE - they don't modify existing routes
-#
-# Inventory & Suppliers (Owner)
-# from inventory_suppliers import inventory_suppliers_bp  # pyright: ignore[reportMissingImports]
-# app.register_blueprint(inventory_suppliers_bp)
-#
-# System Settings (Owner)
-# from system_settings import system_settings_bp  # pyright: ignore[reportMissingImports]
-# app.register_blueprint(system_settings_bp)
-#
-# Promotions (Owner)
-# from promotions import promotions_bp  # pyright: ignore[reportMissingImports]
-# app.register_blueprint(promotions_bp)
-#
-# from system_settings import system_settings_bp  # pyright: ignore[reportMissingImports]
-# from promotions import promotions_bp  # pyright: ignore[reportMissingImports]
-#
-# app.register_blueprint(inventory_suppliers_bp)
-# app.register_blueprint(system_settings_bp)
-# app.register_blueprint(promotions_bp)
-#
->>>>>>> 0a234d52265a8e6e9206c262e98adc4c977c6d87
 print("Blueprints registered")
 # Run server
 app.run(debug=True, port=5000, host='0.0.0.0')
