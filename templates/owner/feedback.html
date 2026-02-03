@@ -1,0 +1,34 @@
+{% extends 'base_owner.html' %}
+{% block title %}Customer Feedback{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">💬 Customer Feedback</h2>
+    <div id="feedbackRoot">Loading...</div>
+</div>
+<script>
+(async function(){
+  const token = localStorage.getItem('authToken') || '';
+  async function load(){
+    try{
+      const r = await fetch('/api/owner/feedback', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
+      const list = await r.json();
+      const root = document.getElementById('feedbackRoot');
+      if(!Array.isArray(list) || !list.length){ root.textContent = 'No feedback yet.'; return; }
+      root.innerHTML = list.map(function(f){
+        const stars = f.rating ? '★'.repeat(f.rating) + '☆'.repeat(5-f.rating) : 'No rating';
+        const time = f.created_at ? new Date(f.created_at).toLocaleString() : '';
+        return `<div style="border-bottom:1px solid #eee;padding:12px 0">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px">
+            <div><strong>${stars}</strong></div>
+            <div style="color:#64748b;font-size:.85em">${time}</div>
+          </div>
+          <div style="color:#111827;line-height:1.6">${f.message||''}</div>
+        </div>`;
+      }).join('');
+    }catch(e){ document.getElementById('feedbackRoot').textContent = 'Failed to load feedback.'; }
+  }
+  load(); setInterval(load, 10000);
+})();
+</script>
+{% endblock %}
+

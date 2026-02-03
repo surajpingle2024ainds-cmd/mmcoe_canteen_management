@@ -1,0 +1,167 @@
+{% extends 'base_owner.html' %}
+{% block title %}Owner Dashboard{% endblock %}
+{% block content %}
+<div class="grid cols-4">
+    <div class="stat-card green">
+        <div class="stat-icon">💰</div>
+        <div class="label">Today's Revenue</div>
+        <div id="d_rev" class="value">₹ —</div>
+        <div id="d_rev_delta" class="delta pos">+ — from yesterday</div>
+    </div>
+    <div class="stat-card purple">
+        <div class="stat-icon">🛒</div>
+        <div class="label">Total Orders</div>
+        <div id="d_orders" class="value">—</div>
+        <div class="delta info">Live</div>
+    </div>
+    <div class="stat-card yellow">
+        <div class="stat-icon">⭐</div>
+        <div class="label">Avg. Rating</div>
+        <div id="d_rating" class="value">—</div>
+        <div class="delta warn">Last 24h</div>
+    </div>
+    <div class="stat-card pink">
+        <div class="stat-icon">🍽️</div>
+        <div class="label">Top Dish</div>
+        <div id="d_dish" class="value">—</div>
+        <div class="delta">Updated daily</div>
+    </div>
+</div>
+
+<div style="height:12px"></div>
+
+<div class="card header">
+    <h2 class="section-title">📊 Overview</h2>
+    <div>
+        <a href="/owner/powerbi" class="btn">Open Power BI</a>
+        <a href="/owner/top-dishes" class="btn ghost">View Top Dishes</a>
+        <a href="/owner/feedback" class="btn ghost">View Feedback</a>
+    </div>
+</div>
+
+<div style="height:12px"></div>
+
+<div class="grid cols-2">
+    <div class="card">
+        <h3 class="section-title">Recent Activity</h3>
+        <div id="d_activity" class="muted">Loading...</div>
+    </div>
+    <div class="card">
+        <h3 class="section-title">Quick Links</h3>
+        <div class="grid cols-3">
+            <a class="btn" href="/owner/pending-orders">Pending Orders</a>
+            <a class="btn ghost" href="/owner/history">View History</a>
+            <a class="btn ghost" href="/owner/kitchen">Kitchen View</a>
+        </div>
+    </div>
+</div>
+<div style="height:12px"></div>
+<div class="card">
+  <h3 class="section-title">Today's Menu Selection</h3>
+  <div id="menuAvailRoot">Loading...</div>
+</div>
+<script>
+(async function(){
+  const token = localStorage.getItem('authToken') || '';
+  async function loadStats(){
+    if(!token){
+      document.getElementById('d_rev').textContent = '₹ —';
+      document.getElementById('d_rev_delta').textContent = 'Please login';
+      document.getElementById('d_orders').textContent = '—';
+      document.getElementById('d_rating').textContent = '—';
+      document.getElementById('d_dish').textContent = '—';
+      return;
+    }
+    
+    try{
+      const r = await fetch('/api/owner/dashboard-stats', { headers: { 'Authorization': 'Bearer ' + token } });
+      if(!r.ok){
+        const error = await r.json().catch(() => ({error: 'Failed to load stats'}));
+        console.error('Dashboard stats error:', error);
+        if(r.status === 401 || r.status === 403){
+          document.getElementById('d_rev').textContent = '₹ —';
+          document.getElementById('d_rev_delta').textContent = 'Unauthorized - Please login';
+          document.getElementById('d_orders').textContent = '—';
+          document.getElementById('d_rating').textContent = '—';
+          document.getElementById('d_dish').textContent = '—';
+        } else {
+          document.getElementById('d_rev').textContent = '₹ —';
+          document.getElementById('d_rev_delta').textContent = 'Error loading';
+          document.getElementById('d_orders').textContent = '—';
+          document.getElementById('d_rating').textContent = '—';
+          document.getElementById('d_dish').textContent = '—';
+        }
+        return;
+      }
+      const data = await r.json();
+      if(data.error){
+        console.error('Dashboard stats error:', data.error);
+        document.getElementById('d_rev').textContent = '₹ —';
+        document.getElementById('d_rev_delta').textContent = 'Error loading';
+        document.getElementById('d_orders').textContent = '—';
+        document.getElementById('d_rating').textContent = '—';
+        document.getElementById('d_dish').textContent = '—';
+        return;
+      }
+      if(data.today_revenue !== undefined) document.getElementById('d_rev').textContent = '₹' + Math.round(data.today_revenue || 0);
+      const delta = (data.today_revenue || 0) - (data.yesterday_revenue || 0);
+      document.getElementById('d_rev_delta').textContent = (delta>=0?'+':'') + Math.round(delta) + ' from yesterday';
+      document.getElementById('d_orders').textContent = String(data.total_orders || 0);
+      document.getElementById('d_rating').textContent = data.avg_rating ? data.avg_rating.toFixed(1) : '—';
+      document.getElementById('d_dish').textContent = (data.top_dish_icon || '') + ' ' + (data.top_dish || '—');
+    }catch(e){
+      console.error('Error loading dashboard stats:', e);
+      document.getElementById('d_rev').textContent = '₹ —';
+      document.getElementById('d_rev_delta').textContent = 'Error loading';
+      document.getElementById('d_orders').textContent = '—';
+      document.getElementById('d_rating').textContent = '—';
+      document.getElementById('d_dish').textContent = '—';
+    }
+  }
+  async function loadActivity(){
+    const root = document.getElementById('d_activity');
+    if(!token){
+      root.innerHTML = '<div style="color:#ef4444;">❌ Please login</div>';
+      return;
+    }
+    
+    try{
+      const r = await fetch('/api/owner/orders/payment-status', { headers: { 'Authorization': 'Bearer ' + token } });
+      if(!r.ok){
+        const error = await r.json().catch(() => ({error: 'Failed to load activity'}));
+        if(r.status === 401 || r.status === 403){
+          root.innerHTML = `<div style="color:#ef4444;">❌ Unauthorized - Please login</div>`;
+        } else {
+          root.innerHTML = `<div style="color:#ef4444;">❌ ${error.error || 'Failed to load activity'}</div>`;
+        }
+        return;
+      }
+      const list = await r.json();
+      if(!Array.isArray(list) || !list.length){ root.textContent = 'No recent activity.'; return; }
+      root.innerHTML = list.slice(0,5).map(function(o){
+        const ps = o.payment_status || 'PENDING';
+        const psClass = ps==='PAID' ? 'badge success' : (ps==='CASH' ? 'badge info' : 'badge pending');
+        return `<div style='display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding:8px 0'><div><strong>#${o.order_id}</strong> ₹${o.total || 0}</div><span class='${psClass}'>${ps}</span></div>`;
+      }).join('');
+    }catch(e){ document.getElementById('d_activity').textContent = 'Failed to load.'; }
+  }
+  async function loadMenu(){
+    try{
+      const res = await fetch('/api/menu/all');
+      const list = await res.json();
+      const root = document.getElementById('menuAvailRoot');
+      if(!Array.isArray(list) || !list.length){ root.textContent = 'No items.'; return; }
+      root.innerHTML = list.map(i=>`<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding:6px 0">
+        <div>${i.icon||''} <strong>${i.name}</strong> <span class="muted">₹${i.price}</span></div>
+        <label style="display:flex;align-items:center;gap:6px"><span>Available</span><input type="checkbox" ${i.available?'checked':''} onchange="toggleAvail(${i.id}, this.checked)"></label>
+      </div>`).join('');
+      window.toggleAvail = async function(id, available){
+        await fetch(`/api/owner/menu/${id}/availability`, { method:'PUT', headers:{ 'Authorization': token ? 'Bearer ' + token : '', 'Content-Type':'application/json' }, body: JSON.stringify({available: !!available}) });
+      }
+    }catch(e){ document.getElementById('menuAvailRoot').textContent = 'Failed to load menu.'; }
+  }
+  loadStats(); loadActivity(); loadMenu();
+  setInterval(function(){ loadStats(); loadActivity(); }, 10000);
+})();
+</script>
+{% endblock %}

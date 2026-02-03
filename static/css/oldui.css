@@ -1,0 +1,69 @@
+/* Old UI theme: colors and component polish applied app-wide */
+:root{
+	--old-primary:#FF6B6B; --old-secondary:#4ECDC4; --old-dark:#2C3E50; --old-light:#F8F9FA;
+	/* Unified primary for header + sidebar + active states */
+	--ui-primary:#667eea;
+}
+
+/* Buttons: gradient style */
+.btn{ background:linear-gradient(135deg,var(--old-primary),var(--old-secondary)); border:none; }
+.btn:hover{ filter:brightness(0.98); }
+.btn.ghost{ background:transparent; color:var(--old-primary); border:1px solid rgba(255,107,107,.35); }
+.btn.ghost:hover{ background:rgba(255,107,107,.08); }
+
+/* Cards */
+.card{ border-radius:15px; box-shadow:0 8px 24px rgba(0,0,0,.06); border:1px solid #eef2ff; }
+.card.header{ align-items:center; }
+
+/* Stat cards: subtle gradient fill */
+.stat-card{ border-radius:14px; border:1px solid #e5e7eb; background:linear-gradient(180deg,#ffffff 0%, #f8fafc 100%); }
+
+/* Muted text */
+.muted{ color:#64748b; }
+
+/* Inputs */
+input, select, textarea{ box-sizing:border-box; }
+
+/* Tables */
+.table th{ background:#f8fafc; }
+
+/* Sidebar links */
+.side-link{ font-weight:700; }
+
+/* Top navigation bar adapted to old landing UI */
+.topbar{ background:linear-gradient(135deg,var(--old-primary),var(--old-secondary))!important; color:#fff!important; box-shadow:0 8px 24px rgba(0,0,0,.2)!important; }
+.topbar .brand{ color:#fff!important; }
+.hamburger{ background:rgba(255,255,255,0.12)!important; border-color:rgba(255,255,255,0.25)!important; color:#fff!important; }
+.topbar .right a{ color:#fff!important; background:rgba(255,255,255,0.08); }
+.topbar .right a:hover{ background:rgba(255,255,255,0.18); }
+
+/* Sidebar polish to match */
+/* Sidebar uses same gradient as buttons/topbar */
+.sidebar{ background:linear-gradient(180deg,var(--old-primary),var(--old-secondary))!important; border-right:1px solid rgba(255,255,255,0.08)!important; width:280px!important; padding-left:0!important; padding-right:0!important; }
+.content-wrap{ margin-left:280px!important; }
+.side-link{ color:#e2e8f0!important; padding:14px 20px!important; border-radius:0!important; font-size:14px!important; display:block!important; font-weight:800!important; letter-spacing:.2px!important; margin:2px 0!important; }
+.side-link:hover{ background:rgba(255,255,255,0.10)!important; }
+.side-link.active{ background:rgba(255,255,255,0.16)!important; color:#fff!important; box-shadow:none!important; }
+.sidebar .group-title{ color:#94a3b8!important; font-weight:800!important; letter-spacing:.08em!important; margin:12px 20px!important; }
+
+@media (max-width: 900px){
+  .content-wrap{ margin-left:0!important; }
+}
+
+/* Role-specific sidebar colors */
+.sidebar.theme-customer{ background:linear-gradient(180deg,#0f172a 0%, #1e293b 60%, #0ea5e9 120%)!important; }
+.sidebar.theme-customer .side-link:hover{ background:rgba(14,165,233,0.18)!important; }
+.sidebar.theme-customer .side-link.active{ background:linear-gradient(135deg,var(--old-primary),var(--old-secondary))!important; }
+
+.sidebar.theme-owner{ background:linear-gradient(180deg,#0f172a 0%, #064e3b 70%, #10b981 130%)!important; }
+.sidebar.theme-owner .side-link:hover{ background:rgba(16,185,129,0.18)!important; }
+.sidebar.theme-owner .side-link.active{ background:linear-gradient(135deg,#059669,#10b981)!important; }
+
+.sidebar.theme-kitchen{ background:linear-gradient(180deg,#0f172a 0%, #312e81 70%, #6366f1 130%)!important; }
+.sidebar.theme-kitchen .side-link:hover{ background:rgba(99,102,241,0.18)!important; }
+.sidebar.theme-kitchen .side-link.active{ background:linear-gradient(135deg,#4f46e5,#6366f1)!important; }
+
+/* Ensure themed sidebars also use same gradient to match topbar */
+.sidebar.theme-customer,
+.sidebar.theme-owner,
+.sidebar.theme-kitchen{ background:linear-gradient(180deg,var(--old-primary),var(--old-secondary))!important; }

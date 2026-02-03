@@ -1,0 +1,110 @@
+{% extends 'base_kitchen.html' %}
+{% block title %}Kitchen Dashboard{% endblock %}
+{% block content %}
+<div class="grid cols-3">
+  <div class="stat-card yellow">
+    <div class="stat-icon">⏱️</div>
+    <div class="label">Avg. Prep Time</div>
+    <div id="k_avg" class="value">—</div>
+    <div class="delta warn">Target: —</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-icon">🧾</div>
+    <div class="label">Orders In Queue</div>
+    <div id="k_queue" class="value">—</div>
+    <div class="delta info">Live</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-icon">✅</div>
+    <div class="label">Completed Today</div>
+    <div id="k_done" class="value">—</div>
+    <div class="delta pos">Smooth operations</div>
+  </div>
+</div>
+
+<div style="height:12px"></div>
+
+<div class="grid cols-2">
+  <div class="card">
+    <h3 class="section-title">Live Orders</h3>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Items</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="3" id="k_rows" class="muted">Loading...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3 class="section-title">Actions</h3>
+    <div class="grid cols-2">
+      <a class="btn" href="/kitchen/orders">Go to Orders</a>
+      <a class="btn ghost" href="/kitchen/history">View History</a>
+      <a class="btn ghost" href="/kitchen/expire-coupons">Expire Coupons</a>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+  (function () {
+    // Debug: Check which token exists
+    console.log('Token Debug: authToken=', localStorage.getItem('authToken'));
+    console.log('Token Debug: token=', localStorage.getItem('token'));
+
+    // Try both keys to be safe
+    const token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+
+    function badge(s) { s = (s || '').toLowerCase(); if (s === 'pending') return 'badge pending'; if (s === 'accepted') return 'badge accepted'; if (s === 'preparing') return 'badge preparing'; if (s === 'ready') return 'badge ready'; if (s === 'delivered') return 'badge delivered'; return 'badge'; }
+    async function load() {
+      try {
+        const r = await fetch('/api/kitchen/orders/live', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
+        let list = await r.json(); if (!Array.isArray(list)) list = [];
+        const queue = list.filter(o => ['pending', 'accepted', 'preparing'].includes(String(o.status || '').toLowerCase())).length;
+        const ready = list.filter(o => String(o.status || '').toLowerCase() === 'ready').length;
+        document.getElementById('k_queue').textContent = String(queue);
+        document.getElementById('k_done').textContent = String(ready);
+        document.getElementById('k_avg').textContent = '--';
+        const tbody = document.getElementById('k_rows');
+        if (!list.length) { tbody.colSpan = 3; tbody.textContent = 'No live orders.'; return; }
+        tbody.parentElement.innerHTML = list.slice(0, 8).map(o => `<tr><td>#${o.id}</td><td>${(o.items || []).map(i => `${i.icon || ''} ${i.name} x${i.quantity}`).join('<br>')}</td><td><span class='${badge(o.status)}'>${String(o.status || '').toUpperCase()}</span></td></tr>`).join('');
+      } catch (e) { var el = document.getElementById('k_rows'); if (el) el.textContent = 'Failed to load.'; }
+    }
+    load(); setInterval(load, 8000);
+
+    // Initialize voice announcement for new orders
+    if (typeof window.waitForVoiceAssistant === 'function') {
+      window.waitForVoiceAssistant(() => {
+        if (kitchenVoiceAssistant && kitchenVoiceAssistant.isEnabled) {
+          setInterval(() => {
+            if (kitchenVoiceAssistant && kitchenVoiceAssistant.isEnabled) {
+              kitchenVoiceAssistant.checkForNewOrders();
+            }
+          }, 5000);
+        }
+      });
+    } else {
+      // Fallback: try after a delay
+      setTimeout(() => {
+        if (typeof window.waitForVoiceAssistant === 'function') {
+          window.waitForVoiceAssistant(() => {
+            if (kitchenVoiceAssistant && kitchenVoiceAssistant.isEnabled) {
+              setInterval(() => {
+                if (kitchenVoiceAssistant && kitchenVoiceAssistant.isEnabled) {
+                  kitchenVoiceAssistant.checkForNewOrders();
+                }
+              }, 5000);
+            }
+          });
+        }
+      }, 1000);
+    }
+  })();
+</script>
+{% endblock %}

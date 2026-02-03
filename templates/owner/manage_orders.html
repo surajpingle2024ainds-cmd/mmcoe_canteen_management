@@ -1,0 +1,109 @@
+{% extends 'base_owner.html' %}
+{% block title %}Manage Orders{% endblock %}
+{% block content %}
+<div class="card header"><h2 class="section-title">🧾 Manage Orders</h2></div>
+<div class="card"><div id="ordersRoot">Loading...</div></div>
+<script>
+(async function(){
+  // Get token and ensure it's clean (remove any extra "Bearer " prefix if stored incorrectly)
+  let token = localStorage.getItem('authToken') || '';
+  if (token && token.startsWith('Bearer ')) {
+    token = token.replace('Bearer ', '');
+  }
+  console.log('[MANAGE ORDERS] Token loaded:', token ? token.substring(0, 20) + '...' : 'NONE');
+  console.log('[MANAGE ORDERS] Current user:', localStorage.getItem('currentUser'));
+  
+  async function load(){
+    const res = await fetch('/api/orders/pending', { headers: { 'Authorization': token?('Bearer '+token):'' } });
+    const data = await res.json();
+    const root = document.getElementById('ordersRoot');
+    if(!Array.isArray(data) || data.length===0){ root.innerHTML='<div class="muted">No pending orders.</div>'; return; }
+    root.innerHTML = data.map(o=>`
+      <div style="border-bottom:1px solid #eef2f7;padding:12px 0;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:800">#${o.order_id} • ₹${o.total}</div>
+          <div class="muted" style="margin-top:6px">${o.items.map(i=>`${i.icon||''} ${i.name} x${i.quantity}`).join(', ')}</div>
+        </div>
+        <div>
+          <button class="btn" data-order-id="${o.id}" onclick="acc(${o.id}, this)">Accept</button>
+          <button class="btn ghost" data-order-id="${o.id}" onclick="rej(${o.id}, this)">Reject</button>
+        </div>
+      </div>`).join('');
+  }
+  window.acc = async function(id, btnElement){
+    try{
+      const btn = btnElement || document.querySelector(`button[data-order-id="${id}"]`);
+      if(btn){
+        btn.disabled = true;
+        btn.textContent = 'Processing...';
+      }
+      const response = await fetch(`/api/owner/orders/${id}/accept`, { 
+        method:'PUT', 
+        headers:{ 
+          'Authorization': token ? ('Bearer ' + token) : '', 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({is_vip: false, is_important: false})
+      });
+      const data = await response.json();
+      if(data && data.success){
+        alert('✅ Order accepted successfully!');
+        load();
+      } else {
+        alert('❌ Failed to accept order: ' + (data.error || 'Unknown error'));
+        if(btn){
+          btn.disabled = false;
+          btn.textContent = 'Accept';
+        }
+      }
+    }catch(error){
+      console.error('Accept order error:', error);
+      alert('❌ Error: ' + error.message);
+      const btn = btnElement || document.querySelector(`button[data-order-id="${id}"]`);
+      if(btn){
+        btn.disabled = false;
+        btn.textContent = 'Accept';
+      }
+    }
+  };
+  
+  window.rej = async function(id, btnElement){
+    try{
+      const btn = btnElement || document.querySelector(`button[data-order-id="${id}"].ghost`);
+      if(btn){
+        btn.disabled = true;
+        btn.textContent = 'Processing...';
+      }
+      const response = await fetch(`/api/owner/orders/${id}/reject`, { 
+        method:'PUT', 
+        headers:{ 
+          'Authorization': token ? ('Bearer ' + token) : '',
+          'Content-Type': 'application/json'
+        } 
+      });
+      const data = await response.json();
+      if(data && data.success){
+        alert('Order rejected');
+        load();
+      } else {
+        alert('❌ Failed to reject order: ' + (data.error || 'Unknown error'));
+        if(btn){
+          btn.disabled = false;
+          btn.textContent = 'Reject';
+        }
+      }
+    }catch(error){
+      console.error('Reject order error:', error);
+      alert('❌ Error: ' + error.message);
+      const btn = btnElement || document.querySelector(`button[data-order-id="${id}"].ghost`);
+      if(btn){
+        btn.disabled = false;
+        btn.textContent = 'Reject';
+      }
+    }
+  };
+  load();
+})();
+</script>
+{% endblock %}
+

@@ -1,0 +1,300 @@
+{% extends 'base.html' %}
+{% block title %}{% if self.title() %}{{ super() }}{% else %}Kitchen{% endif %}{% endblock %}
+{% block sidenav %}
+<div class="group-title">Kitchen</div>
+<a class="side-link" href="/kitchen/dashboard">Dashboard</a>
+<a class="side-link" href="/kitchen/orders">Orders</a>
+<a class="side-link" href="/kitchen/history">History</a>
+<a class="side-link" href="/kitchen/expire-coupons">Expire Coupons</a>
+{% endblock %}
+{% block content %}{{ super() }}{% endblock %}
+
+<script>
+(function(){ var sb=document.getElementById('sidebar'); if(sb) sb.classList.add('theme-kitchen'); })();
+</script>
+<script src="{{ url_for('static', filename='js/kitchen_voice.js') }}"></script>
+<script>
+// Wait for voice assistant to be ready - global helper function
+window.waitForVoiceAssistant = function(callback) {
+    if (typeof kitchenVoiceAssistant !== 'undefined' && kitchenVoiceAssistant !== null) {
+        callback();
+    } else {
+        window.addEventListener('kitchenVoiceAssistantReady', callback, { once: true });
+        // Also check periodically in case event was missed
+        const checkInterval = setInterval(() => {
+            if (typeof kitchenVoiceAssistant !== 'undefined' && kitchenVoiceAssistant !== null) {
+                clearInterval(checkInterval);
+                callback();
+            }
+        }, 100);
+        // Timeout after 3 seconds
+        setTimeout(() => clearInterval(checkInterval), 3000);
+    }
+};
+</script>
+<style>
+/* Voice Assistant Styles - Kitchen Module */
+.voice-controls {
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    z-index: 1000 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    align-items: flex-end !important;
+}
+
+.voice-control-panel {
+    background: #ffffff !important;
+    border-radius: 16px !important;
+    padding: 24px !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.08) !important;
+    border: 2px solid #e5e7eb !important;
+    min-width: 320px !important;
+    max-width: 380px !important;
+}
+
+.voice-control-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid #f3f4f6;
+}
+
+.voice-control-header h4 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.voice-status {
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: 600;
+    background: #f3f4f6;
+    color: #6b7280;
+    white-space: nowrap;
+    transition: all 0.3s ease;
+}
+
+.voice-status.active {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    animation: pulse-glow 2s infinite;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+
+@keyframes pulse-glow {
+    0%, 100% { 
+        opacity: 1;
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+    }
+    50% { 
+        opacity: 0.9;
+        box-shadow: 0 2px 12px rgba(37, 99, 235, 0.5);
+    }
+}
+
+@keyframes buttonPulse {
+    0%, 100% {
+        box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
+    }
+}
+
+.voice-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.voice-btn {
+    padding: 14px 20px !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.voice-btn:active {
+    transform: scale(0.97) translateY(1px) !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15) !important;
+}
+
+.voice-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.4s, height 0.4s;
+}
+
+.voice-btn:active::before {
+    width: 300px;
+    height: 300px;
+}
+
+.voice-btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+    color: white !important;
+}
+
+.voice-btn-primary:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4) !important;
+}
+
+.voice-btn-primary.active {
+    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+    animation: buttonPulse 2s infinite !important;
+}
+
+.voice-btn-secondary {
+    background: #f3f4f6 !important;
+    color: #374151 !important;
+}
+
+.voice-btn-secondary:hover {
+    background: #e5e7eb !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12) !important;
+}
+
+.voice-btn-danger {
+    background: linear-gradient(135deg, #fee2e2, #fecaca) !important;
+    color: #dc2626 !important;
+    font-weight: 700 !important;
+}
+
+.voice-btn-danger:hover {
+    background: linear-gradient(135deg, #fecaca, #fca5a5) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(220, 38, 38, 0.3) !important;
+}
+
+.voice-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.voice-toggle-btn {
+    width: 64px !important;
+    height: 64px !important;
+    border-radius: 50% !important;
+    border: 3px solid white !important;
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    color: white !important;
+    font-size: 28px !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.5) !important;
+    transition: all 0.3s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: relative !important;
+}
+
+.voice-toggle-btn:hover {
+    transform: scale(1.15) !important;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.6) !important;
+}
+
+.voice-toggle-btn:active {
+    transform: scale(0.95) !important;
+}
+
+.voice-toggle-btn.listening {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+    animation: pulse-ring 2s infinite;
+}
+
+@keyframes pulse-ring {
+    0% {
+        box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+    }
+    50% {
+        box-shadow: 0 4px 24px rgba(239, 68, 68, 0.6), 0 0 0 8px rgba(239, 68, 68, 0.1);
+    }
+    100% {
+        box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+    }
+}
+
+.voice-help-text {
+    font-size: 13px;
+    color: #6b7280;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 2px solid #f3f4f6;
+    line-height: 1.6;
+}
+
+.voice-help-text strong {
+    color: #111827;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.voice-control-panel.collapsed {
+    display: none;
+}
+
+.voice-commands-list {
+    font-size: 13px !important;
+    color: #4b5563 !important;
+    margin-top: 12px !important;
+    padding-left: 20px !important;
+    list-style: none !important;
+}
+
+.voice-commands-list li {
+    margin: 8px 0 !important;
+    padding: 6px 0 6px 8px !important;
+    position: relative !important;
+    border-left: 2px solid transparent !important;
+    transition: all 0.2s !important;
+}
+
+.voice-commands-list li:hover {
+    border-left-color: #3b82f6 !important;
+    padding-left: 12px !important;
+}
+
+.voice-commands-list li:before {
+    content: "▶" !important;
+    position: absolute !important;
+    left: -14px !important;
+    color: #3b82f6 !important;
+    font-weight: bold !important;
+    font-size: 10px !important;
+}
+</style>
+
+

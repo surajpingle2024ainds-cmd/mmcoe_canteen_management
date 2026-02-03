@@ -1,0 +1,888 @@
+{% extends 'base_kitchen.html' %}
+{% block title %}Kitchen Orders{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">📦 Kitchen Orders</h2>
+    <div id="kitchenOrdersRoot">Loading...</div>
+</div>
+
+<!-- Simple Voice Assistant Controls -->
+<div class="voice-controls">
+    <div id="voiceControlPanel" class="voice-control-panel collapsed">
+        <div class="voice-control-header">
+            <h4>🎤 Voice Assistant</h4>
+            <span id="voice-listening-indicator" class="voice-status">🔇 Not listening</span>
+        </div>
+        <div class="voice-buttons">
+            <button id="voiceEnableBtn" class="voice-btn voice-btn-primary">
+                <span>🔊</span>
+                <span id="voiceEnableText">Enable Voice</span>
+            </button>
+            <button id="voiceListenBtn" class="voice-btn voice-btn-secondary" disabled>
+                <span>🎤</span>
+                <span>Start Listening</span>
+            </button>
+            <button id="voiceHelpBtn" class="voice-btn voice-btn-secondary">
+                <span>❓</span>
+                <span>Voice Commands</span>
+            </button>
+            <button id="voiceCloseBtn" class="voice-btn voice-btn-danger">
+                <span>✕</span>
+                <span>Close</span>
+            </button>
+        </div>
+        <div class="voice-help-text">
+            <strong>Quick Commands:</strong>
+            <ul class="voice-commands-list">
+                <li>"What orders" - List all orders</li>
+                <li>"First order ready" - Mark first order ready</li>
+                <li>"Complete order two" - Mark second order complete</li>
+                <li>"Order one ready" - Mark order one ready</li>
+                <li>"How many orders" - Get order count</li>
+            </ul>
+        </div>
+    </div>
+    <button id="voiceToggleBtn" class="voice-toggle-btn" title="Voice Assistant">
+        🎤
+    </button>
+</div>
+
+<style>
+.voice-controls {
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    z-index: 1000 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    align-items: flex-end !important;
+}
+
+.voice-control-panel {
+    background: #ffffff !important;
+    border-radius: 16px !important;
+    padding: 24px !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15) !important;
+    border: 2px solid #e5e7eb !important;
+    min-width: 320px !important;
+    max-width: 380px !important;
+}
+
+.voice-control-panel.collapsed {
+    display: none !important;
+}
+
+.voice-control-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    margin-bottom: 16px !important;
+    padding-bottom: 14px !important;
+    border-bottom: 2px solid #f3f4f6 !important;
+}
+
+.voice-control-header h4 {
+    margin: 0 !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+}
+
+.voice-status {
+    font-size: 12px !important;
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    font-weight: 600 !important;
+    background: #f3f4f6 !important;
+    color: #6b7280 !important;
+    white-space: nowrap !important;
+    transition: all 0.3s ease !important;
+}
+
+.voice-status.active {
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+    color: white !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3) !important;
+}
+
+.voice-buttons {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+}
+
+.voice-btn {
+    padding: 14px 20px !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
+}
+
+.voice-btn:active {
+    transform: scale(0.95) !important;
+}
+
+.voice-btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+    color: white !important;
+}
+
+.voice-btn-primary:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4) !important;
+}
+
+.voice-btn-primary.active {
+    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+}
+
+.voice-btn-secondary {
+    background: #f3f4f6 !important;
+    color: #374151 !important;
+}
+
+.voice-btn-secondary:hover {
+    background: #e5e7eb !important;
+    transform: translateY(-1px) !important;
+}
+
+.voice-btn-danger {
+    background: linear-gradient(135deg, #fee2e2, #fecaca) !important;
+    color: #dc2626 !important;
+}
+
+.voice-btn-danger:hover {
+    background: linear-gradient(135deg, #fecaca, #fca5a5) !important;
+    transform: translateY(-2px) !important;
+}
+
+.voice-btn:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+.voice-toggle-btn {
+    width: 64px !important;
+    height: 64px !important;
+    border-radius: 50% !important;
+    border: 3px solid white !important;
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    color: white !important;
+    font-size: 28px !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.5) !important;
+    transition: all 0.3s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.voice-toggle-btn:hover {
+    transform: scale(1.15) !important;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.6) !important;
+}
+
+.voice-toggle-btn:active {
+    transform: scale(0.95) !important;
+}
+
+.voice-toggle-btn.listening {
+    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+    animation: pulse-ring 2s infinite !important;
+}
+
+@keyframes pulse-ring {
+    0% { box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4); }
+    50% { box-shadow: 0 4px 24px rgba(239, 68, 68, 0.6), 0 0 0 8px rgba(239, 68, 68, 0.1); }
+    100% { box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4); }
+}
+
+.voice-help-text {
+    font-size: 13px !important;
+    color: #6b7280 !important;
+    margin-top: 16px !important;
+    padding-top: 16px !important;
+    border-top: 2px solid #f3f4f6 !important;
+}
+
+.voice-help-text strong {
+    color: #111827 !important;
+    display: block !important;
+    margin-bottom: 8px !important;
+}
+
+.voice-commands-list {
+    font-size: 13px !important;
+    color: #4b5563 !important;
+    margin-top: 12px !important;
+    padding-left: 20px !important;
+    list-style: none !important;
+}
+
+.voice-commands-list li {
+    margin: 8px 0 !important;
+    padding: 6px 0 6px 8px !important;
+    position: relative !important;
+}
+
+.voice-commands-list li:before {
+    content: "▶" !important;
+    position: absolute !important;
+    left: -14px !important;
+    color: #3b82f6 !important;
+    font-size: 10px !important;
+}
+</style>
+
+<script>
+// Simple Voice Assistant - All inline to avoid loading issues
+(function() {
+    'use strict';
+    
+    const token = localStorage.getItem('authToken') || '';
+    let isVoiceEnabled = false;
+    let isListening = false;
+    let recognition = null;
+    let synthesis = window.speechSynthesis;
+    
+    // Initialize Speech Recognition
+    let isSpeaking = false;
+    let lastCommand = '';
+    let lastCommandTime = 0;
+    
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+        
+        recognition.onresult = function(event) {
+            // Only process final results, skip if we're speaking (to avoid feedback)
+            if (isSpeaking) {
+                console.log('Skipping command - assistant is speaking');
+                return;
+            }
+            
+            // Get the last final result
+            const result = event.results[event.results.length - 1];
+            if (result.isFinal) {
+                const transcript = result[0].transcript.trim().toLowerCase();
+                
+                // Filter out very short commands (likely noise)
+                if (transcript.length < 3) {
+                    console.log('Skipping short command:', transcript);
+                    return;
+                }
+                
+                // Filter out common assistant responses
+                if (transcript.includes('i did not understand') || 
+                    transcript.includes('say help') ||
+                    transcript.includes('voice assistant') ||
+                    transcript.includes('you can say')) {
+                    console.log('Skipping assistant feedback:', transcript);
+                    return;
+                }
+                
+                // Debounce: ignore duplicate or very similar commands within 2 seconds
+                const now = Date.now();
+                const timeSinceLastCommand = now - lastCommandTime;
+                const isSimilar = lastCommand && (
+                    transcript === lastCommand || 
+                    transcript.includes(lastCommand) || 
+                    lastCommand.includes(transcript) ||
+                    transcript.length > 5 && lastCommand.length > 5 && 
+                    transcript.substring(0, Math.min(5, transcript.length)) === lastCommand.substring(0, Math.min(5, lastCommand.length))
+                );
+                
+                if (isSimilar && timeSinceLastCommand < 2000) {
+                    console.log('Skipping duplicate command:', transcript);
+                    return;
+                }
+                
+                lastCommand = transcript;
+                lastCommandTime = now;
+                
+                console.log('Voice command:', transcript);
+                handleVoiceCommand(transcript);
+            }
+        };
+        
+        recognition.onerror = function(event) {
+            console.error('Speech recognition error:', event.error);
+            if (event.error === 'no-speech' || event.error === 'audio-capture') {
+                // Restart if there was an audio issue
+                if (isListening && !isSpeaking) {
+                    setTimeout(() => {
+                        if (isListening && recognition && !isSpeaking) {
+                            try {
+                                recognition.start();
+                            } catch(e) {}
+                        }
+                    }, 500);
+                }
+            }
+        };
+        
+        recognition.onend = function() {
+            if (isListening && !isSpeaking) {
+                setTimeout(() => {
+                    if (isListening && recognition && !isSpeaking) {
+                        try {
+                            recognition.start();
+                        } catch(e) {}
+                    }
+                }, 300);
+            }
+        };
+    }
+    
+    // Voice functions
+    function speak(text) {
+        if (!isVoiceEnabled || !text) return;
+        
+        // Temporarily stop listening while speaking to avoid feedback
+        const wasListening = isListening;
+        if (wasListening && recognition) {
+            try {
+                recognition.stop();
+            } catch(e) {}
+        }
+        isSpeaking = true;
+        
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.1;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        utterance.onend = function() {
+            isSpeaking = false;
+            // Resume listening after speaking
+            if (wasListening && isListening && recognition) {
+                setTimeout(() => {
+                    if (isListening && recognition && !isSpeaking) {
+                        try {
+                            recognition.start();
+                        } catch(e) {}
+                    }
+                }, 500);
+            }
+        };
+        
+        utterance.onerror = function() {
+            isSpeaking = false;
+            // Resume listening after error
+            if (wasListening && isListening && recognition) {
+                setTimeout(() => {
+                    if (isListening && recognition && !isSpeaking) {
+                        try {
+                            recognition.start();
+                        } catch(e) {}
+                    }
+                }, 500);
+            }
+        };
+        
+        synthesis.speak(utterance);
+    }
+    
+    function updateIndicator(listening) {
+        const indicator = document.getElementById('voice-listening-indicator');
+        if (indicator) {
+            indicator.textContent = listening ? '🎤 Listening...' : '🔇 Not listening';
+            indicator.classList.toggle('active', listening);
+        }
+    }
+    
+    function handleVoiceCommand(transcript) {
+        const cmd = transcript.toLowerCase().trim();
+        
+        // Stop listening command
+        if ((cmd.includes('stop') && cmd.includes('listen')) || cmd === 'stop') {
+            stopListening();
+            return;
+        }
+        
+        // Help command (check early)
+        if (cmd === 'help' || cmd.includes('help')) {
+            speak('Commands: What orders, How many orders, Show order number, Mark order number ready.');
+            return;
+        }
+        
+        // What orders / Show orders / List orders
+        if ((cmd.includes('what') && cmd.includes('order')) || 
+            (cmd.includes('show') && cmd.includes('order')) ||
+            (cmd === 'orders' || cmd === 'what orders' || cmd === 'show orders')) {
+            fetch('/api/kitchen/orders/live', {
+                headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+            })
+            .then(r => r.json())
+            .then(orders => {
+                if (Array.isArray(orders) && orders.length > 0) {
+                    speak(`You have ${orders.length} active orders.`);
+                } else {
+                    speak('There are no pending orders.');
+                }
+            });
+            return;
+        }
+        
+        // How many orders
+        if ((cmd.includes('how many') && cmd.includes('order')) || cmd === 'how many orders') {
+            fetch('/api/kitchen/orders/live', {
+                headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+            })
+            .then(r => r.json())
+            .then(orders => {
+                if (Array.isArray(orders)) {
+                    speak(`You have ${orders.length} orders.`);
+                }
+            });
+            return;
+        }
+        
+        // Show order details (e.g., "show order 123" or "order 123")
+        const orderMatch = cmd.match(/(?:show|get|order|tell\s*me\s*about)\s*(\d+)/);
+        if (orderMatch) {
+            const orderId = parseInt(orderMatch[1]);
+            fetch('/api/kitchen/orders/live', {
+                headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+            })
+            .then(r => r.json())
+            .then(orders => {
+                const order = orders.find(o => o.db_id === orderId || o.id === orderId);
+                if (order) {
+                    const items = (order.items || []).map(i => `${i.quantity} ${i.name}`).join(', ');
+                    speak(`Order ${orderId}. Items: ${items}. Total: ${order.total} rupees.`);
+                } else {
+                    speak(`Order ${orderId} not found.`);
+                }
+            });
+            return;
+        }
+        
+        // Update order status using position/number (e.g., "first order ready", "order one ready", "complete order two")
+        // Match patterns like: "first/second/third/one/two/three order ready/complete/preparing"
+        const positionWords = {
+            'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5, 'sixth': 6, 'seventh': 7, 'eighth': 8,
+            'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8,
+            '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8
+        };
+        
+        // Try matching position-based commands: "first order ready", "order one ready", "complete order two"
+        const positionMatch = cmd.match(/(?:mark|set|make|update|complete)?\s*(?:order\s*)?(first|second|third|fourth|fifth|sixth|seventh|eighth|one|two|three|four|five|six|seven|eight|\d+)\s*(?:order\s*)?(?:as\s*)?(ready|preparing|pending|delivered|complete|completed|done)/i);
+        if (positionMatch) {
+            const positionWord = positionMatch[1].toLowerCase();
+            const positionNum = positionWords[positionWord] || parseInt(positionWord);
+            let status = positionMatch[2].toLowerCase();
+            
+            // Map status words
+            if (status === 'complete' || status === 'completed' || status === 'done') {
+                status = 'delivered';
+            }
+            
+            // Fetch orders and get the order at that position
+            fetch('/api/kitchen/orders/live', {
+                headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+            })
+            .then(r => r.json())
+            .then(orders => {
+                if (!Array.isArray(orders) || orders.length === 0) {
+                    speak('No orders available.');
+                    return;
+                }
+                
+                // Filter and sort: VIP/important first, then by creation time
+                const vip_orders = orders.filter(o => o.is_vip || (o.kitchen_notes && o.kitchen_notes.includes('[IMPORTANT]')));
+                const regular_orders = orders.filter(o => !o.is_vip && (!o.kitchen_notes || !o.kitchen_notes.includes('[IMPORTANT]')));
+                const sortedOrders = [...vip_orders, ...regular_orders];
+                
+                if (positionNum < 1 || positionNum > sortedOrders.length) {
+                    speak(`Order ${positionWord} not found. There are ${sortedOrders.length} orders.`);
+                    return;
+                }
+                
+                const targetOrder = sortedOrders[positionNum - 1];
+                const dbId = targetOrder.db_id || targetOrder.id;
+                const displayId = targetOrder.id || targetOrder.order_id || 'order';
+                
+                // Update the order status
+                fetch(`/api/kitchen/orders/${dbId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': token ? 'Bearer ' + token : '',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: status })
+                })
+                .then(r => {
+                    if (r.ok) {
+                        speak(`${displayId} marked ${status}.`);
+                        // Reload orders after a delay by dispatching event
+                        setTimeout(() => {
+                            window.dispatchEvent(new CustomEvent('orderStatusUpdated'));
+                        }, 500);
+                    } else {
+                        speak(`Failed to update ${displayId}.`);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error updating order:', err);
+                    speak(`Error updating order.`);
+                });
+            })
+            .catch(err => {
+                console.error('Error fetching orders:', err);
+                speak('Error fetching orders.');
+            });
+            return;
+        }
+        
+        // Don't speak errors to avoid feedback loop - just log
+        console.log('Unrecognized command:', cmd);
+    }
+    
+    function startListening() {
+        if (!recognition) {
+            alert('Voice recognition not supported. Use Chrome or Edge.');
+            return;
+        }
+        if (!isVoiceEnabled) {
+            alert('Please enable voice first.');
+            return;
+        }
+        try {
+            recognition.start();
+            isListening = true;
+            updateIndicator(true);
+            const btn = document.getElementById('voiceListenBtn');
+            if (btn) {
+                btn.innerHTML = '<span>🔇</span><span>Stop Listening</span>';
+                btn.classList.remove('voice-btn-secondary');
+                btn.classList.add('voice-btn-danger');
+            }
+            const toggleBtn = document.getElementById('voiceToggleBtn');
+            if (toggleBtn) toggleBtn.classList.add('listening');
+            speak('Voice assistant activated. I am listening.');
+        } catch (e) {
+            console.error('Error starting recognition:', e);
+        }
+    }
+    
+    function stopListening() {
+        if (recognition && isListening) {
+            recognition.stop();
+            isListening = false;
+            updateIndicator(false);
+            const btn = document.getElementById('voiceListenBtn');
+            if (btn) {
+                btn.innerHTML = '<span>🎤</span><span>Start Listening</span>';
+                btn.classList.remove('voice-btn-danger');
+                btn.classList.add('voice-btn-secondary');
+            }
+            const toggleBtn = document.getElementById('voiceToggleBtn');
+            if (toggleBtn) toggleBtn.classList.remove('listening');
+        }
+    }
+    
+    function cancelAllSpeech() {
+        // Cancel any ongoing or queued speech immediately
+        if (synthesis.speaking) {
+            synthesis.cancel();
+        }
+        isSpeaking = false;
+    }
+    
+    function disableVoice() {
+        // Stop all speech immediately
+        cancelAllSpeech();
+        
+        // Stop listening if active
+        if (recognition && isListening) {
+            try {
+                recognition.stop();
+            } catch(e) {}
+            isListening = false;
+        }
+        
+        // Update state
+        isVoiceEnabled = false;
+        isSpeaking = false;
+        
+        // Update UI
+        const btn = document.getElementById('voiceEnableBtn');
+        const text = document.getElementById('voiceEnableText');
+        const listenBtn = document.getElementById('voiceListenBtn');
+        const toggleBtn = document.getElementById('voiceToggleBtn');
+        const indicator = document.getElementById('voice-listening-indicator');
+        
+        if (btn) {
+            btn.classList.remove('active');
+            btn.classList.remove('voice-btn-danger');
+            btn.classList.add('voice-btn-primary');
+        }
+        if (text) text.textContent = 'Enable Voice';
+        if (listenBtn) {
+            listenBtn.disabled = true;
+            listenBtn.style.opacity = '0.5';
+            listenBtn.innerHTML = '<span>🎤</span><span>Start Listening</span>';
+            listenBtn.classList.remove('voice-btn-danger');
+            listenBtn.classList.add('voice-btn-secondary');
+        }
+        if (toggleBtn) toggleBtn.classList.remove('listening');
+        if (indicator) {
+            indicator.textContent = '🔇 Not listening';
+            indicator.classList.remove('active');
+        }
+    }
+    
+    // Button handlers
+    document.getElementById('voiceToggleBtn').addEventListener('click', function() {
+        const panel = document.getElementById('voiceControlPanel');
+        if (panel) panel.classList.toggle('collapsed');
+    });
+    
+    document.getElementById('voiceCloseBtn').addEventListener('click', function() {
+        const panel = document.getElementById('voiceControlPanel');
+        if (panel) panel.classList.add('collapsed');
+    });
+    
+    document.getElementById('voiceEnableBtn').addEventListener('click', function() {
+        const btn = this;
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => btn.style.transform = '', 150);
+        
+        if (isVoiceEnabled) {
+            // Disable voice - cancel all speech and stop listening immediately
+            disableVoice();
+        } else {
+            // Enable voice
+            isVoiceEnabled = true;
+            btn.classList.add('active');
+            btn.classList.remove('voice-btn-primary');
+            btn.classList.add('voice-btn-danger');
+            document.getElementById('voiceEnableText').textContent = 'Disable Voice';
+            document.getElementById('voiceListenBtn').disabled = false;
+            document.getElementById('voiceListenBtn').style.opacity = '1';
+            speak('Voice assistant enabled.');
+        }
+    });
+    
+    document.getElementById('voiceListenBtn').addEventListener('click', function() {
+        const btn = this;
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => btn.style.transform = '', 150);
+        
+        if (isListening) {
+            stopListening();
+        } else {
+            startListening();
+        }
+    });
+    
+    document.getElementById('voiceHelpBtn').addEventListener('click', function() {
+        const btn = this;
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => btn.style.transform = '', 150);
+        
+        if (!isVoiceEnabled) {
+            isVoiceEnabled = true;
+            document.getElementById('voiceEnableBtn').click();
+        }
+        speak('You can say: What orders, How many orders, Show order number, Mark order number as ready, Stop listening.');
+    });
+    
+    // Check for new orders
+    let lastOrderCount = 0;
+    let knownOrders = new Set();
+    
+    function checkNewOrders() {
+        if (!isVoiceEnabled) return;
+        
+        fetch('/api/kitchen/orders/live', {
+            headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+        })
+        .then(r => r.json())
+        .then(orders => {
+            if (!Array.isArray(orders)) return;
+            
+            const currentOrderIds = new Set(orders.map(o => o.db_id || o.id));
+            
+            if (lastOrderCount === 0) {
+                knownOrders = currentOrderIds;
+                lastOrderCount = orders.length;
+                return;
+            }
+            
+            if (orders.length > lastOrderCount) {
+                orders.forEach(order => {
+                    const orderId = order.db_id || order.id;
+                    if (!knownOrders.has(orderId)) {
+                        const items = (order.items || []).map(i => `${i.quantity} ${i.name}`).join(', ');
+                        const vip = order.is_vip ? ' VIP order. ' : '';
+                        speak(`New order received. ${vip}Order number ${order.id}. Items: ${items}. Total: ${order.total} rupees.`);
+                        knownOrders.add(orderId);
+                    }
+                });
+            }
+            
+            knownOrders = currentOrderIds;
+            lastOrderCount = orders.length;
+        })
+        .catch(err => console.error('Error checking new orders:', err));
+    }
+    
+    // Start checking for new orders when voice is enabled
+    const enableBtn = document.getElementById('voiceEnableBtn');
+    if (enableBtn) {
+        enableBtn.addEventListener('click', function() {
+            setTimeout(() => {
+                if (isVoiceEnabled) {
+                    setInterval(checkNewOrders, 5000);
+                }
+            }, 1000);
+        });
+    }
+})();
+
+// Orders loading code (existing)
+(function(){
+  const token = localStorage.getItem('authToken') || '';
+  async function load(){
+    try {
+      const res = await fetch('/api/kitchen/orders/live', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
+      const orders = await res.json();
+      const root = document.getElementById('kitchenOrdersRoot');
+      if (!Array.isArray(orders) || orders.length === 0) { root.textContent = 'No orders.'; return; }
+      const vip_orders = orders.filter(o=>o.is_vip||(o.kitchen_notes&&o.kitchen_notes.includes('[IMPORTANT]')));
+      const regular_orders = orders.filter(o=>!o.is_vip&&(!o.kitchen_notes||!o.kitchen_notes.includes('[IMPORTANT]')));
+      root.innerHTML = (vip_orders.length ? '<div style="font-weight:800;color:var(--primary);margin-bottom:12px;padding:8px;background:#fff3cd;border-radius:8px;border-left:4px solid var(--primary)">⭐ VIP / IMPORTANT ORDERS</div>' : '') + vip_orders.map(o => {
+        const s = (o.status||'').toLowerCase();
+        let label = '';
+        if (s==='pending' || s==='accepted') label = 'Start Preparing';
+        else if (s==='preparing') label = 'Mark Completed';
+        else if (s==='ready') label = 'Expire Coupon';
+        else label = 'Completed';
+        const disabled = (s==='delivered') ? 'disabled' : '';
+        return `
+        <div style="border-bottom:1px solid #eee;padding:10px 0;border-left:4px solid var(--primary);padding-left:12px;background:#fff3cd;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div><strong>#${o.id}</strong> — ₹${o.total} ${o.is_vip ? '<span class="badge accepted">VIP</span>' : ''} ${(o.kitchen_notes&&o.kitchen_notes.includes('[IMPORTANT]')) ? '<span class="badge preparing">IMPORTANT</span>' : ''}</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button class="btn ghost" onclick="showIngredients(${o.db_id})">📋 Ingredients</button>
+              <button class="btn" ${disabled} onclick="step(${o.db_id}, '${s}')">${label}</button>
+            </div>
+          </div>
+          <div style="color:#777;margin-top:6px;">${(o.items||[]).map(i=>`${i.icon||''} ${i.name} x${i.quantity}`).join(', ')}</div>
+          <div id="ingredients_${o.db_id}" style="margin-top:12px;display:none;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb;"></div>
+        </div>`;
+      }).join('') + (regular_orders.length ? '<div style="font-weight:800;color:#64748b;margin-top:20px;margin-bottom:12px;padding:8px">Regular Orders</div>' : '') + regular_orders.map(o => {
+        const s = (o.status||'').toLowerCase();
+        let label = '';
+        if (s==='pending' || s==='accepted') label = 'Start Preparing';
+        else if (s==='preparing') label = 'Mark Completed';
+        else if (s==='ready') label = 'Expire Coupon';
+        else label = 'Completed';
+        const disabled = (s==='delivered') ? 'disabled' : '';
+        return `
+        <div style="border-bottom:1px solid #eee;padding:10px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div><strong>#${o.id}</strong> — ₹${o.total}</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button class="btn ghost" onclick="showIngredients(${o.db_id})">📋 Ingredients</button>
+              <button class="btn" ${disabled} onclick="step(${o.db_id}, '${s}')">${label}</button>
+            </div>
+          </div>
+          <div style="color:#777;margin-top:6px;">${(o.items||[]).map(i=>`${i.icon||''} ${i.name} x${i.quantity}`).join(', ')}</div>
+          <div id="ingredients_${o.db_id}" style="margin-top:12px;display:none;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb;"></div>
+        </div>`;
+      }).join('');
+    } catch(e) { document.getElementById('kitchenOrdersRoot').textContent = 'Failed to load.'; }
+  }
+  window.step = async function(id, s){
+    try{
+      let next = null;
+      if(s==='pending' || s==='accepted') next = 'preparing';
+      else if(s==='preparing') next = 'ready';
+      else if(s==='ready') next = 'delivered';
+      if(!next) return;
+      await fetch(`/api/kitchen/orders/${id}/status`, { method:'PUT', headers: { 'Authorization': token ? 'Bearer ' + token : '', 'Content-Type':'application/json' }, body: JSON.stringify({status: next}) });
+      load();
+    }catch(e){ /* no-op */ }
+  };
+  
+  window.showIngredients = async function(orderId){
+    const ingDiv = document.getElementById('ingredients_' + orderId);
+    if(!ingDiv) return;
+    
+    if(ingDiv.style.display === 'none' || ingDiv.style.display === ''){
+      ingDiv.style.display = 'block';
+      ingDiv.innerHTML = 'Loading ingredients checklist...';
+      
+      try{
+        const response = await fetch('/api/advanced/orders/' + orderId + '/ingredients', {
+          headers: {'Authorization': token ? 'Bearer ' + token : ''}
+        });
+        const data = await response.json();
+        
+        if(data.ingredients && data.ingredients.length > 0){
+          ingDiv.innerHTML = `
+            <div style="font-weight:700;margin-bottom:12px;color:#1e40af;">📋 Ingredient Checklist</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
+              ${data.ingredients.map(function(ing){
+                return `
+                  <div style="padding:8px;background:#fff;border-radius:8px;border:1px solid #e5e7eb;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                      <input type="checkbox" style="width:18px;height:18px;cursor:pointer;" onchange="updateIngredientCheck(this, '${ing.name}')">
+                      <span style="flex:1;"><strong>${ing.name}</strong></span>
+                      <span style="color:#64748b;">x${ing.quantity}</span>
+                    </label>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+            <div style="margin-top:12px;padding:8px;background:#dbeafe;border-radius:8px;color:#1e40af;">
+              <strong>Total Items:</strong> ${data.total_items} items in this order
+            </div>
+          `;
+        } else {
+          ingDiv.innerHTML = '<div style="color:#64748b;">No ingredient information available.</div>';
+        }
+      }catch(e){
+        ingDiv.innerHTML = '<div style="color:#ef4444;">Failed to load ingredients.</div>';
+      }
+    } else {
+      ingDiv.style.display = 'none';
+    }
+  };
+  
+  window.updateIngredientCheck = function(checkbox, ingredientName){
+    if(checkbox.checked){
+      checkbox.parentElement.style.textDecoration = 'line-through';
+      checkbox.parentElement.style.opacity = '0.6';
+    } else {
+      checkbox.parentElement.style.textDecoration = '';
+      checkbox.parentElement.style.opacity = '1';
+    }
+  };
+  load();
+  setInterval(load, 8000);
+  
+  // Listen for order status updates
+  window.addEventListener('orderStatusUpdated', () => {
+    load();
+  });
+})();
+</script>
+{% endblock %}

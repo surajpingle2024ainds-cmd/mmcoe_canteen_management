@@ -1,0 +1,32 @@
+{% extends 'base_owner.html' %}
+{% block title %}Kitchen Portal (Owner){% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">🍳 Kitchen Orders (Owner View)</h2>
+    <div id="kitchenRoot">Loading...</div>
+</div>
+<script>
+(async function(){
+  const token = localStorage.getItem('authToken') || '';
+  try {
+    const res = await fetch('/api/kitchen/orders/live', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
+    const orders = await res.json();
+    const root = document.getElementById('kitchenRoot');
+    if (!Array.isArray(orders) || orders.length === 0) { root.textContent = 'No orders in queue.'; return; }
+    root.innerHTML = orders.map(o => `
+      <div style=\"border-bottom:1px solid #eee;padding:10px 0;\">
+        <div style=\"display:flex;justify-content:space-between;align-items:center;\">
+          <div><strong>#${o.id}</strong> — ₹${o.total}</div>
+          <span style=\"font-size:.9em;color:#555\">${(o.status||'pending').toUpperCase()}</span>
+        </div>
+        <div style=\"color:#777;margin-top:6px;\">${(o.items||[]).map(i=>`${i.icon||''} ${i.name} x${i.quantity}`).join(', ')}</div>
+      </div>
+    `).join('');
+  } catch(e) {
+    document.getElementById('kitchenRoot').textContent = 'Failed to load.';
+  }
+})();
+</script>
+{% endblock %}
+
+

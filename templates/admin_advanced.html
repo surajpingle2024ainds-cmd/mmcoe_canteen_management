@@ -1,0 +1,70 @@
+<!-- === NEW FEATURE: ADMIN PORTAL ADVANCED === -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Owner/Admin Portal - Advanced</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="admin-navbar">
+        <div class="logo">🍽️ Canteen Admin</div>
+        <button class="logout-btn" onclick="location.href='/logout'">Logout</button>
+    </div>
+    <div class="admin-tabs">
+        <button class="tab-btn active" onclick="showAdminSection('dashboard')">Analytics Dashboard</button>
+        <button class="tab-btn" onclick="showAdminSection('menu')">Menu & Pricing</button>
+        <button class="tab-btn" onclick="showAdminSection('customers')">Customers</button>
+        <button class="tab-btn" onclick="showAdminSection('reports')">Financial Reports</button>
+        <button class="tab-btn" onclick="showAdminSection('staff')">Staff</button>
+        <button class="tab-btn" onclick="showAdminSection('inventory')">Inventory</button>
+        <button class="tab-btn" onclick="showAdminSection('config')">System Config</button>
+        <button class="tab-btn" onclick="showAdminSection('promos')">Promotions</button>
+    </div>
+    <div class="admin-content">
+        <section id="dashboard-section" class="admin-section active">
+            <h2>Comprehensive Analytics Dashboard</h2>
+            <canvas id="salesChart"></canvas>
+            <canvas id="customerChart"></canvas>
+            <!-- Ready for Chart.js dynamic data -->
+        </section>
+        <section id="menu-section" class="admin-section">
+            <h2>Menu & Pricing Management</h2>
+            <button>Add New Menu Item</button>
+            <table class="admin-table" id="menuTable">...</table>
+        </section>
+        <section id="customers-section" class="admin-section">
+            <h2>Customer Management System</h2>
+            <table class="admin-table" id="customerTable">...</table>
+        </section>
+        <section id="reports-section" class="admin-section">
+            <h2>Financial Reports</h2>
+            <div id="reportContent">Generate/download reports here</div>
+        </section>
+        <section id="staff-section" class="admin-section">
+            <h2>Staff Management</h2>
+            <button>Add/Remove Staff</button>
+            <table class="admin-table" id="staffTable">...</table>
+        </section>
+        <section id="inventory-section" class="admin-section">
+            <h2>Inventory & Supplier Tracking</h2>
+            <button>Add Inventory</button>
+            <button>Add Supplier</button>
+            <table class="admin-table" id="inventoryTable">...</table>
+            <table class="admin-table" id="supplierTable">...</table>
+        </section>
+        <section id="config-section" class="admin-section">
+            <h2>System Configuration</h2>
+            <form id="configForm">...</form>
+        </section>
+        <section id="promos-section" class="admin-section">
+            <h2>Promotions & Marketing Tools</h2>
+            <button>Create Promotion</button>
+            <table class="admin-table" id="promoTable">...</table>
+        </section>
+    </div>
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>
