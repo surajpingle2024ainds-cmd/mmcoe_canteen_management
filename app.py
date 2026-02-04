@@ -361,6 +361,63 @@ def login_customer_api():
         print(f"Login Error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/auth/login/otp', methods=['POST', 'OPTIONS'])
+def login_otp_api():
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        data = request.get_json()
+        phone = data.get('phone', '').strip()
+        otp = data.get('otp', '').strip()
+        
+        if not phone or not otp:
+            return jsonify({'error': 'Phone and OTP are required'}), 400
+            
+        # Verify OTP
+        if phone not in otp_storage:
+             return jsonify({'error': 'OTP not found or expired'}), 400
+             
+        stored = otp_storage[phone]
+        if str(stored['otp']) != str(otp):
+            return jsonify({'error': 'Invalid OTP'}), 400
+            
+        # OTP Valid - Clear it
+        del otp_storage[phone]
+        
+        # Find User
+        user = User.query.filter_by(phone=phone).first()
+        if not user:
+            return jsonify({'error': 'User not found. Please sign up first.'}), 404
+            
+        if user.role != 'customer':
+             return jsonify({'error': 'Access restricted to customers'}), 403
+             
+        token = generate_token(user.id)
+        print(f"\n[LOGIN] OTP LOGIN: {user.phone}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Login successful',
+            'token': token,
+            'user': {
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'phone': user.phone,
+                'role': user.role,
+                'college_id': user.college_id,
+                'department': user.department,
+                'year': user.year,
+                'address': user.address,
+                'wallet_balance': getattr(user, 'wallet_balance', 0.0)
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"OTP Login Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/auth/login/staff', methods=['POST', 'OPTIONS'])
 def login_staff_api():
     if request.method == 'OPTIONS':
