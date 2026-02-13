@@ -12,3 +12,6 @@ Werkzeug>=3.0.0
 
 # HTTP Requests (used in utils/route_monitor.py)
 requests>=2.31.0
+
+# Smooth server
+gunicorn
