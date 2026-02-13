@@ -1,0 +1,184 @@
+{% extends 'base_owner.html' %}
+{% block title %}Daily Orders{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">📊 Daily Orders Report</h2>
+    <div style="margin-bottom:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <label style="font-weight:700">Select Date:</label>
+        <input type="date" id="dateFilter" value="" style="padding:8px 12px;border:2px solid #e5e7eb;border-radius:8px" />
+        <button class="btn" onclick="loadDailyOrders()">Load Orders</button>
+        <button class="btn ghost" onclick="exportToCSV()">📥 Export CSV</button>
+    </div>
+    <div id="dailyOrdersRoot">Select a date and click "Load Orders"</div>
+</div>
+
+<script>
+(async function(){
+  const token = localStorage.getItem('authToken') || '';
+  
+  // Set default date to today
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('dateFilter').value = today;
+  
+  window.loadDailyOrders = async function(){
+    const date = document.getElementById('dateFilter').value || today;
+    const root = document.getElementById('dailyOrdersRoot');
+    root.textContent = 'Loading...';
+    
+    try{
+      const res = await fetch('/api/owner/daily-orders?date=' + date, {
+        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+      });
+      
+      if(!res.ok){
+        const error = await res.json().catch(() => ({error: 'Failed to load orders'}));
+        root.innerHTML = `<div style="color:#ef4444;padding:20px;">❌ ${error.error || 'Failed to load daily orders'}</div>`;
+        return;
+      }
+      
+      const orders = await res.json();
+      
+      if (!Array.isArray(orders)) {
+        root.innerHTML = `<div style="color:#ef4444;padding:20px;">❌ Invalid response from server</div>`;
+        return;
+      }
+      
+      if(!orders.length){
+        root.innerHTML = '<div class="muted">No orders found for this date.</div>';
+        return;
+      }
+      
+      let totalRevenue = 0;
+      let onlineCount = 0;
+      let cashCount = 0;
+      
+      orders.forEach(function(o){
+        totalRevenue += o.total_amount || 0;
+        if(o.payment_method === 'online'){
+          onlineCount++;
+        } else if(o.payment_method === 'cash'){
+          cashCount++;
+        }
+      });
+      
+      root.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px">
+          <div style="background:linear-gradient(135deg, #667eea, #764ba2);color:#fff;padding:20px;border-radius:12px">
+            <div style="font-size:14px;opacity:0.9">Total Orders</div>
+            <div style="font-size:32px;font-weight:800;margin-top:8px">${orders.length}</div>
+          </div>
+          <div style="background:linear-gradient(135deg, #f093fb, #f5576c);color:#fff;padding:20px;border-radius:12px">
+            <div style="font-size:14px;opacity:0.9">Total Revenue</div>
+            <div style="font-size:32px;font-weight:800;margin-top:8px">₹${Math.round(totalRevenue)}</div>
+          </div>
+          <div style="background:linear-gradient(135deg, #4facfe, #00f2fe);color:#fff;padding:20px;border-radius:12px">
+            <div style="font-size:14px;opacity:0.9">Online Payments</div>
+            <div style="font-size:32px;font-weight:800;margin-top:8px">${onlineCount}</div>
+          </div>
+          <div style="background:linear-gradient(135deg, #43e97b, #38f9d7);color:#fff;padding:20px;border-radius:12px">
+            <div style="font-size:14px;opacity:0.9">Cash Payments</div>
+            <div style="font-size:32px;font-weight:800;margin-top:8px">${cashCount}</div>
+          </div>
+        </div>
+        <div style="margin-top:24px">
+          <h3 style="margin-bottom:16px">Order Details</h3>
+          ${orders.map(function(o){
+            const items = Array.isArray(o.items) ? o.items : [];
+            const orderTime = o.order_time ? new Date(o.order_time).toLocaleString() : '—';
+            const statusBadge = o.status === 'delivered' ? '<span style="background:#22c55e;color:#fff;padding:4px 8px;border-radius:6px;font-size:12px">DELIVERED</span>' : 
+                              o.status === 'pending' ? '<span style="background:#f59e0b;color:#fff;padding:4px 8px;border-radius:6px;font-size:12px">PENDING</span>' :
+                              '<span style="background:#3b82f6;color:#fff;padding:4px 8px;border-radius:6px;font-size:12px">' + (o.status || 'UNKNOWN').toUpperCase() + '</span>';
+            
+            return `
+              <div style="border:2px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px;background:#f8fafc">
+                <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+                  <div>
+                    <strong style="font-size:16px;color:#111827">#${o.order_id}</strong>
+                    <div style="color:#64748b;margin-top:4px;font-size:14px">${orderTime}</div>
+                  </div>
+                  <div style="text-align:right">
+                    ${statusBadge}
+                    <div style="font-weight:700;color:#ef4444;margin-top:8px;font-size:18px">₹${o.total_amount}</div>
+                  </div>
+                </div>
+                <div style="margin-bottom:12px">
+                  <div style="color:#64748b;font-size:14px"><strong>Customer:</strong> ${o.customer_name || '—'}</div>
+                  <div style="color:#64748b;font-size:14px"><strong>Phone:</strong> ${o.customer_phone || '—'}</div>
+                  <div style="color:#64748b;font-size:14px"><strong>Email:</strong> ${o.customer_email || '—'}</div>
+                </div>
+                <div style="margin-bottom:12px">
+                  <div style="color:#64748b;font-size:14px"><strong>Payment:</strong> 
+                    <span style="background:${o.payment_method === 'online' ? '#3b82f6' : '#22c55e'};color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">${(o.payment_method || 'unknown').toUpperCase()}</span>
+                  </div>
+                  <div style="color:#64748b;font-size:14px"><strong>Transaction ID:</strong> ${o.transaction_id || '—'}</div>
+                </div>
+                <div>
+                  <strong style="font-size:14px">Items:</strong>
+                  <div style="margin-top:8px">
+                    ${items.map(function(item){
+                      return `<div style="padding:6px 0;border-bottom:1px solid #e5e7eb">
+                        <span style="font-size:18px">${item.icon || '🍽️'}</span>
+                        <strong>${item.name || 'Unknown'}</strong>
+                        <span style="color:#64748b">x${item.quantity || 1}</span>
+                        <span style="float:right;color:#ef4444;font-weight:700">₹${(item.price || 0) * (item.quantity || 1)}</span>
+                      </div>`;
+                    }).join('')}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }catch(e){
+      root.innerHTML = '<div style="color:#ef4444">Failed to load orders: ' + e.message + '</div>';
+      console.error(e);
+    }
+  };
+  
+  window.exportToCSV = async function(){
+    const date = document.getElementById('dateFilter').value || today;
+    try{
+      const res = await fetch('/api/owner/daily-orders?date=' + date, {
+        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+      });
+      
+      const orders = await res.json();
+      
+      if(!Array.isArray(orders) || !orders.length){
+        alert('No orders to export');
+        return;
+      }
+      
+      // Create CSV content
+      let csv = 'Order ID,Customer Name,Phone,Email,Order Time,Total Amount,Payment Method,Transaction ID,Status,Items\n';
+      
+      orders.forEach(function(o){
+        const items = Array.isArray(o.items) ? o.items : [];
+        const itemsStr = items.map(function(i){ return `${i.name} x${i.quantity}`; }).join('; ');
+        const orderTime = o.order_time ? new Date(o.order_time).toLocaleString() : '—';
+        
+        csv += `"${o.order_id || ''}","${o.customer_name || ''}","${o.customer_phone || ''}","${o.customer_email || ''}","${orderTime}","${o.total_amount || 0}","${o.payment_method || ''}","${o.transaction_id || ''}","${o.status || ''}","${itemsStr}"\n`;
+      });
+      
+      // Download CSV
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'daily_orders_' + date + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }catch(e){
+      alert('Failed to export: ' + e.message);
+    }
+  };
+  
+  // Load today's orders by default
+  loadDailyOrders();
+})();
+</script>
+{% endblock %}
+

@@ -1,0 +1,121 @@
+{% extends 'base_kitchen.html' %}
+{% block title %}Order History{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">📊 Order History</h2>
+    <div style="margin-bottom:16px">
+        <select id="statusFilter" onchange="loadHistory()" style="padding:8px;border-radius:8px;border:1px solid #ddd;">
+            <option value="">All Orders</option>
+            <option value="delivered">Delivered</option>
+            <option value="ready">Ready</option>
+            <option value="preparing">Preparing</option>
+            <option value="accepted">Accepted</option>
+            <option value="pending">Pending</option>
+        </select>
+        <input type="date" id="dateFilter" onchange="loadHistory()" style="padding:8px;border-radius:8px;border:1px solid #ddd;margin-left:8px;">
+    </div>
+    <div id="historyRoot">Loading...</div>
+</div>
+<script>
+(function(){
+  const token = localStorage.getItem('authToken') || '';
+  
+  function badgeCls(s){
+    s = (s || '').toLowerCase();
+    if(s === 'pending') return 'badge pending';
+    if(s === 'accepted') return 'badge accepted';
+    if(s === 'preparing') return 'badge preparing';
+    if(s === 'ready') return 'badge ready';
+    if(s === 'delivered') return 'badge delivered';
+    return 'badge';
+  }
+  
+  async function loadHistory(){
+    try {
+      const statusFilter = document.getElementById('statusFilter').value;
+      const dateFilter = document.getElementById('dateFilter').value;
+      let url = '/api/kitchen/orders/history';
+      const params = [];
+      if(statusFilter) params.push('status=' + encodeURIComponent(statusFilter));
+      if(dateFilter) params.push('date=' + encodeURIComponent(dateFilter));
+      if(params.length) url += '?' + params.join('&');
+      
+      if(!token){
+        document.getElementById('historyRoot').innerHTML = '<div style="color:#ef4444;padding:20px;text-align:center;">❌ Not logged in. Please <a href="/">login</a> first.</div>';
+        return;
+      }
+      
+      const res = await fetch(url, { 
+        headers: { 
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        } 
+      });
+      
+      if(!res.ok){
+        const error = await res.json().catch(() => ({error: 'Failed to load history'}));
+        let errorMsg = error.error || 'Failed to load history';
+        
+        if(res.status === 401 || res.status === 403){
+          errorMsg = 'Unauthorized. Please logout and login again as kitchen staff or owner.';
+          document.getElementById('historyRoot').innerHTML = '<div style="color:#ef4444;padding:20px;text-align:center;">❌ ' + errorMsg + '<br><a href="/" class="btn" style="margin-top:12px;display:inline-block;">Go to Login</a></div>';
+        } else {
+          document.getElementById('historyRoot').innerHTML = '<div style="color:#ef4444;padding:20px;text-align:center;">❌ Error: ' + errorMsg + '<br><button onclick="loadHistory()" class="btn" style="margin-top:12px;">Retry</button></div>';
+        }
+        return;
+      }
+      
+      const data = await res.json();
+      const root = document.getElementById('historyRoot');
+      
+      if (!data || !Array.isArray(data) || data.length === 0) { 
+        root.innerHTML = '<div class="muted">No orders found.</div>'; 
+        return; 
+      }
+      
+      root.innerHTML = data.map(o => `
+        <div style="border-bottom:1px solid #eee;padding:12px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div>
+              <strong>#${o.id || o.order_id}</strong>
+              <span style="color:#777;margin-left:12px;">${o.customer_name || 'Customer'}</span>
+            </div>
+            <span class="${badgeCls(o.status)}">${(o.status || '').toUpperCase()}</span>
+          </div>
+          <div style="color:#777;margin-top:6px;font-size:0.9em;">
+            ${new Date(o.timestamp || o.created_at).toLocaleString()}
+            ${o.total ? ' • ₹' + o.total : ''}
+          </div>
+          <div style="margin-top:8px;">
+            ${(o.items || []).map(i => `${i.icon || ''} ${i.name} x${i.quantity}`).join(', ')}
+          </div>
+          ${o.kitchen_notes ? `<div style="margin-top:6px;padding:6px;background:#fff3cd;border-radius:4px;font-size:0.85em;"><strong>Note:</strong> ${o.kitchen_notes}</div>` : ''}
+        </div>
+      `).join('');
+    } catch(e) {
+      console.error('History load error:', e);
+      const root = document.getElementById('historyRoot');
+      if(root){
+        root.innerHTML = '<div style="color:#ef4444;padding:20px;text-align:center;">❌ Failed to load history: ' + (e.message || 'Unknown error') + '<br><button onclick="loadHistory()" class="btn" style="margin-top:12px;">Retry</button></div>';
+      }
+    }
+  }
+  
+  // Expose function globally for retry button
+  window.loadHistory = loadHistory;
+  
+  // Set today's date as default (optional)
+  const dateFilterEl = document.getElementById('dateFilter');
+  if(dateFilterEl){
+    // Don't set default - let user choose or view all orders
+  }
+  
+  // Load on page load
+  loadHistory();
+  
+  // Auto-refresh every 30 seconds
+  setInterval(loadHistory, 30000);
+})();
+</script>
+{% endblock %}
+

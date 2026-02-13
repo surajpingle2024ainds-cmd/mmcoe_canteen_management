@@ -1,0 +1,14 @@
+# Core Flask dependencies
+Flask>=3.0.0,<4.0.0
+flask-cors>=4.0.0
+flask-sqlalchemy>=3.1.0
+
+# Database
+SQLAlchemy>=2.0.0
+
+# Security and Authentication
+PyJWT>=2.8.0
+Werkzeug>=3.0.0
+
+# HTTP Requests (used in utils/route_monitor.py)
+requests>=2.31.0

@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}{% if self.title() %}{{ super() }}{% else %}Owner{% endif %}{% endblock %}
+{% block sidenav %}
+<div class="group-title">Owner</div>
+<a class="side-link" href="/owner/dashboard">Dashboard</a>
+<a class="side-link" href="/owner/pending-orders">Pending Orders</a>
+<a class="side-link" href="/owner/history">History</a>
+<a class="side-link" href="/owner/powerbi">Power BI</a>
+<a class="side-link" href="/owner/top-dishes">Top Dishes</a>
+<a class="side-link" href="/owner/cash-order">Cash Order</a>
+<a class="side-link" href="/owner/feedback">Feedback</a>
+<a class="side-link" href="/owner/todays-menu">Today's Menu</a>
+<a class="side-link" href="/owner/kitchen">Kitchen</a>
+<a class="side-link" href="/owner/offers">🎁 Offers</a>
+<a class="side-link" href="/owner/combos">🍱 Combos</a>
+<a class="side-link" href="/owner/daily-orders">📊 Daily Orders</a>
+{% endblock %}
+{% block content %}{{ super() }}{% endblock %}
+
+<script>
+(function(){ var sb=document.getElementById('sidebar'); if(sb) sb.classList.add('theme-owner'); })();
+</script>
+
+

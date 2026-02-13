@@ -1,0 +1,107 @@
+{% extends 'base_owner.html' %}
+{% block title %}Cash Order{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">💰 Place Cash Order</h2>
+    <div id="cashOrderRoot">
+        <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:6px;font-weight:700">Customer Name</label>
+            <input id="cashCustName" placeholder="Enter customer name" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
+        </div>
+        <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:6px;font-weight:700">Customer Phone</label>
+            <input id="cashCustPhone" placeholder="Enter phone (optional)" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
+        </div>
+        <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:6px;font-weight:700">Select Items</label>
+            <div id="cashMenuList">Loading menu...</div>
+        </div>
+        <div id="cashCart" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:16px;display:none">
+            <div style="font-weight:800;margin-bottom:8px">Selected Items</div>
+            <div id="cashCartItems"></div>
+            <div style="margin-top:12px;font-weight:800;color:var(--primary)">Total: ₹<span id="cashTotal">0</span></div>
+        </div>
+        <button class="btn" onclick="placeCashOrder()">Place Order</button>
+        <div id="cashAlert" style="margin-top:12px"></div>
+    </div>
+</div>
+<script>
+(function(){
+  const token = localStorage.getItem('authToken') || '';
+  let allItems = [];
+  let cashCart = [];
+  async function loadMenu(){
+    try{
+      const r = await fetch('/api/menu/all');
+      allItems = await r.json() || [];
+      const root = document.getElementById('cashMenuList');
+      if(!Array.isArray(allItems) || !allItems.length){ root.textContent = 'No menu items.'; return; }
+      root.innerHTML = allItems.filter(i=>i.available).map(i=>`<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding:8px 0">
+        <div>${i.icon||''} <strong>${i.name}</strong> <span class="muted">₹${i.price}</span></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="btn ghost" style="padding:6px 10px" onclick="cashAdd(${i.id},-1)">-</button>
+          <span id="cash_qty_${i.id}" style="min-width:28px;text-align:center;font-weight:800">0</span>
+          <button class="btn ghost" style="padding:6px 10px" onclick="cashAdd(${i.id},1)">+</button>
+        </div>
+      </div>`).join('');
+    }catch(e){ document.getElementById('cashMenuList').textContent = 'Failed to load menu.'; }
+  }
+  window.cashAdd = function(id, delta){
+    const item = allItems.find(x=>x.id===id);
+    if(!item) return;
+    let found = cashCart.find(x=>x.id===id);
+    if(found){ found.quantity = Math.max(0, found.quantity + delta); if(found.quantity===0) cashCart = cashCart.filter(x=>x.id!==id); }
+    else if(delta>0){ cashCart.push({id:id,name:item.name,price:item.price,icon:item.icon,quantity:1}); }
+    renderCart();
+  };
+  function renderCart(){
+    const box = document.getElementById('cashCart');
+    const items = document.getElementById('cashCartItems');
+    const total = document.getElementById('cashTotal');
+    cashCart.forEach(function(c){ const qtyEl = document.getElementById('cash_qty_'+c.id); if(qtyEl) qtyEl.textContent = String(c.quantity); });
+    if(cashCart.length===0){ box.style.display='none'; return; }
+    box.style.display='block';
+    let t = 0;
+    items.innerHTML = cashCart.map(c=>{ t+=c.price*c.quantity; return `<div style="display:flex;justify-content:space-between;padding:6px 0">${c.icon||''} ${c.name} x${c.quantity} <strong>₹${c.price*c.quantity}</strong></div>`; }).join('');
+    total.textContent = String(Math.round(t));
+  }
+  window.placeCashOrder = async function(){
+    const name = (document.getElementById('cashCustName').value||'').trim();
+    if(!name){ alert('Enter customer name'); return; }
+    if(cashCart.length===0){ alert('Add items to cart'); return; }
+    const alertDiv = document.getElementById('cashAlert');
+    try{
+      alertDiv.innerHTML = '<div style="color:#64748b;">Placing order...</div>';
+      const r = await fetch('/api/owner/orders/create-cash', { 
+        method:'POST', 
+        headers:{ 
+          'Authorization': token ? 'Bearer ' + token : '', 
+          'Content-Type':'application/json' 
+        }, 
+        body: JSON.stringify({ 
+          customer_name:name, 
+          customer_phone:(document.getElementById('cashCustPhone').value||'').trim()||'0000000000', 
+          items: cashCart.map(c=>({id:c.id,quantity:c.quantity})) 
+        }) 
+      });
+      const j = await r.json();
+      if(!r.ok) {
+        throw new Error(j.error || 'Failed to place order');
+      }
+      alertDiv.innerHTML = `<div style="color:#22c55e;padding:10px;background:#d1fae5;border-radius:8px;">✅ Order #${j.order_id} placed! Total: ₹${j.total}</div>`;
+      cashCart = []; 
+      document.getElementById('cashCustName').value=''; 
+      document.getElementById('cashCustPhone').value=''; 
+      renderCart(); 
+      loadMenu();
+      setTimeout(() => { alertDiv.innerHTML = ''; }, 3000);
+    }catch(e){ 
+      alertDiv.innerHTML = `<div style="color:#ef4444;padding:10px;background:#fee2e2;border-radius:8px;">❌ ${e.message}</div>`;
+      console.error('Cash order error:', e);
+    }
+  };
+  loadMenu();
+})();
+</script>
+{% endblock %}
+

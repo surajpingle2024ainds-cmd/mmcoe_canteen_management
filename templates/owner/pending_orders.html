@@ -1,0 +1,124 @@
+{% extends 'base_owner.html' %}
+{% block title %}Pending Orders{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">⏳ Pending Orders</h2>
+    <div id="pendingRoot">Loading...</div>
+</div>
+<script>
+(async function(){
+  // Get token and ensure it's clean (remove any extra "Bearer " prefix if stored incorrectly)
+  let token = localStorage.getItem('authToken') || '';
+  if (token && token.startsWith('Bearer ')) {
+    token = token.replace('Bearer ', '');
+  }
+  console.log('[PENDING ORDERS] Token loaded:', token ? token.substring(0, 20) + '...' : 'NONE');
+  console.log('[PENDING ORDERS] Current user:', localStorage.getItem('currentUser'));
+  
+  async function load(){
+    try {
+      const res = await fetch('/api/orders/pending', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
+      const root = document.getElementById('pendingRoot');
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({error: 'Failed to load orders'}));
+        root.innerHTML = `<div style="color:#ef4444;padding:20px;">❌ ${error.error || 'Failed to load pending orders'}</div>`;
+        return;
+      }
+      const orders = await res.json();
+      if (!Array.isArray(orders) || orders.length === 0) { root.textContent = 'No pending orders.'; return; }
+      root.innerHTML = orders.map(o => `
+        <div style="border-bottom:1px solid #eee;padding:10px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div><strong>#${o.order_id}</strong> — ₹${o.total} ${o.is_vip ? '<span class="badge accepted">VIP</span>' : ''}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button data-id="${o.id}" class="btn-accept btn" style="padding:6px 10px;border:none;border-radius:8px;background:#22c55e;color:white;cursor:pointer;">Accept</button>
+              <button data-id="${o.id}" class="btn-reject btn ghost" style="padding:6px 10px;">Reject</button>
+            </div>
+          </div>
+          <div style="color:#777;margin-top:6px;">${(o.items||[]).map(i=>`${i.icon||''} ${i.name} x${i.quantity}`).join(', ')}</div>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" data-id="${o.id}" data-type="vip" class="opt-check"> Mark as VIP</label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" data-id="${o.id}" data-type="important" class="opt-check"> Mark as Important</label>
+          </div>
+        </div>
+      `).join('');
+    } catch(e) {
+      document.getElementById('pendingRoot').textContent = 'Failed to load.';
+    }
+    }
+    
+    // Use event delegation - attach listener once to root
+    document.getElementById('pendingRoot').addEventListener('click', async (e)=>{
+      const btn = e.target.closest('.btn-accept');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Processing...';
+        try {
+          const id = parseInt(btn.getAttribute('data-id'));
+          const vipCheckbox = document.querySelector(`input[data-id="${id}"][data-type="vip"]`);
+          const impCheckbox = document.querySelector(`input[data-id="${id}"][data-type="important"]`);
+          const vip = vipCheckbox ? vipCheckbox.checked : false;
+          const imp = impCheckbox ? impCheckbox.checked : false;
+          
+          const r = await fetch(`/api/owner/orders/${id}/accept`, { 
+            method:'PUT', 
+            headers:{ 
+              'Authorization': token ? 'Bearer ' + token : '', 
+              'Content-Type':'application/json' 
+            }, 
+            body: JSON.stringify({is_vip:vip,is_important:imp}) 
+          });
+          
+          const j = await r.json();
+          if (j && j.success) {
+            alert('✅ Order accepted successfully!');
+            load(); // Reload without full page refresh
+          } else {
+            alert('❌ Failed to accept order: ' + (j.error || 'Unknown error'));
+            btn.disabled = false;
+            btn.textContent = 'Accept';
+          }
+        } catch(error) {
+          console.error('Accept order error:', error);
+          alert('❌ Error: ' + error.message);
+          btn.disabled = false;
+          btn.textContent = 'Accept';
+        }
+        return;
+      }
+      const rej = e.target.closest('.btn-reject');
+      if (rej) {
+        rej.disabled = true;
+        rej.textContent = 'Processing...';
+        try {
+          const id = parseInt(rej.getAttribute('data-id'));
+          const r = await fetch(`/api/owner/orders/${id}/reject`, { 
+            method:'PUT', 
+            headers:{ 
+              'Authorization': token ? 'Bearer ' + token : '',
+              'Content-Type': 'application/json'
+            } 
+          });
+          const j = await r.json();
+          if (j && j.success) {
+            alert('Order rejected');
+            load();
+          } else {
+            alert('❌ Failed to reject order: ' + (j.error || 'Unknown error'));
+            rej.disabled = false;
+            rej.textContent = 'Reject';
+          }
+        } catch(error) {
+          console.error('Reject order error:', error);
+          alert('❌ Error: ' + error.message);
+          rej.disabled = false;
+          rej.textContent = 'Reject';
+        }
+        return;
+      }
+    });
+    
+    load(); setInterval(load, 8000);
+})();
+</script>
+{% endblock %}

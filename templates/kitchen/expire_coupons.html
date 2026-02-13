@@ -1,0 +1,36 @@
+{% extends 'base_kitchen.html' %}
+{% block title %}Expire Coupons{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 class="section-title">🎫 Expire Coupons</h2>
+    <div style="margin-bottom:10px">Scan QR or enter Order Code to expire after pickup.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+        <input id="orderCode" placeholder="Enter Order Code e.g., ORD173..." style="flex:1;min-width:260px;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
+        <button class="btn" onclick="expireManual()">Expire</button>
+    </div>
+    <div id="readyList" class="muted">Loading ready orders...</div>
+</div>
+<script>
+(function(){
+  const token = localStorage.getItem('authToken') || '';
+  async function loadReady(){
+    try{
+      const r = await fetch('/api/kitchen/orders/live', { headers:{ 'Authorization': token ? 'Bearer ' + token : '' } });
+      let list = await r.json(); if(!Array.isArray(list)) list=[];
+      list = list.filter(o=> String(o.status||'').toLowerCase()==='ready');
+      const root = document.getElementById('readyList');
+      if(!list.length){ root.textContent = 'No ready orders right now.'; return; }
+      root.innerHTML = list.map(o=>`<div style='display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding:8px 0'>
+        <div><strong>#${o.id}</strong> — ₹${o.total}</div>
+        <button class='btn' onclick="expireById(${o.db_id})">Expire</button>
+      </div>`).join('');
+    }catch(e){ document.getElementById('readyList').textContent = 'Failed to load ready orders.'; }
+  }
+  window.expireById = async function(id){ try{ await fetch(`/api/kitchen/orders/${id}/status`, { method:'PUT', headers:{ 'Authorization': token ? 'Bearer ' + token : '', 'Content-Type':'application/json' }, body: JSON.stringify({status:'delivered'}) }); loadReady(); }catch(e){} };
+  window.expireManual = async function(){ var code=(document.getElementById('orderCode').value||'').trim(); if(!code) return; try{ await fetch(`/api/kitchen/orders/by-code/${encodeURIComponent(code)}/deliver`, { method:'PUT', headers:{ 'Authorization': token ? 'Bearer ' + token : '' } }); document.getElementById('orderCode').value=''; loadReady(); alert('Expired (Delivered)'); }catch(e){ alert('Failed'); } };
+  loadReady(); setInterval(loadReady, 8000);
+})();
+</script>
+{% endblock %}
+
+

@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Kitchen Login{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;margin:30px auto;background:transparent;border:none;box-shadow:none;padding:0;">
+  <h2 class="section-title">🍳 Kitchen Login</h2>
+  <div id="loginAlert" style="margin:10px 0;color:#b91c1c;font-weight:700;"></div>
+  <div style="display:grid;gap:12px;">
+    <div>
+      <label>Email or Staff ID</label>
+      <input id="email" type="text" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;box-sizing:border-box;">
+    </div>
+    <div>
+      <label>Password</label>
+      <input id="password" type="password" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;box-sizing:border-box;" onkeypress="if(event.key==='Enter') doLogin()">
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <input type="checkbox" id="rememberMe" style="width:18px;height:18px;cursor:pointer;">
+      <label for="rememberMe" style="margin:0;font-weight:500;font-size:0.9em;color:#64748b;cursor:pointer;">Keep me logged in</label>
+    </div>
+    <button class="btn" onclick="doLogin()">Login</button>
+    <div style="font-size:.9em;color:#6b7280">No account? <a href="/register/kitchen">Register</a></div>
+  </div>
+</div>
+<script>
+async function doLogin(){
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  // Owner override
+  if (email.toLowerCase()==='owner' && password==='123') { window.location.href = '/owner/dashboard'; return; }
+  try {
+    const rememberMe = document.getElementById('rememberMe').checked;
+    const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password, remember_me: rememberMe }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Login failed');
+    localStorage.setItem('authToken', j.token);
+    localStorage.setItem('currentUser', JSON.stringify(j.user));
+    if (j.user.role === 'owner') window.location.href = '/owner/dashboard';
+    else window.location.href = '/kitchen/dashboard';
+  } catch(e){
+    document.getElementById('loginAlert').textContent = e.message;
+  }
+}
+</script>
+{% endblock %}
+
+
