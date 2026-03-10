@@ -1,115 +1,142 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://api.qrserver.com https://cdn.jsdelivr.net https://actions.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://api.qrserver.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.qrserver.com https://actions.google.com;">
-    <title>{% block title %}MMCOE Canteen{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/admin.css">
-    <link rel="stylesheet" href="/static/css/oldui.css">
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin:0; transition: background-color 0.3s, color 0.3s; }
-        
-        /* Dark Mode Styles */
-        body.dark-mode {
-            background: #0f172a !important;
-            color: #e2e8f0 !important;
-        }
-        body.dark-mode .card {
-            background: #1e293b !important;
-            color: #e2e8f0 !important;
-            border-color: #334155 !important;
-        }
-        body.dark-mode .topbar {
-            background: #1e293b !important;
-            border-color: #334155 !important;
-        }
-        body.dark-mode .sidebar {
-            background: #1e293b !important;
-            border-color: #334155 !important;
-        }
-        body.dark-mode input, body.dark-mode select, body.dark-mode textarea {
-            background: #334155 !important;
-            color: #e2e8f0 !important;
-            border-color: #475569 !important;
-        }
-        body.dark-mode .btn {
-            background: #334155 !important;
-            color: #e2e8f0 !important;
-            border-color: #475569 !important;
-        }
-        body.dark-mode .btn:hover {
-            background: #475569 !important;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://api.qrserver.com https://cdn.jsdelivr.net https://actions.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://api.qrserver.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.qrserver.com https://actions.google.com;">
+  <title>{% block title %}MMCOE Canteen{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <link rel="stylesheet" href="/static/css/oldui.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    /* Dark Mode Styles */
+    body.dark-mode {
+      background: #0f172a !important;
+      color: #e2e8f0 !important;
+    }
+
+    body.dark-mode .card {
+      background: #1e293b !important;
+      color: #e2e8f0 !important;
+      border-color: #334155 !important;
+    }
+
+    body.dark-mode .topbar {
+      background: #1e293b !important;
+      border-color: #334155 !important;
+    }
+
+    body.dark-mode .sidebar {
+      background: #1e293b !important;
+      border-color: #334155 !important;
+    }
+
+    body.dark-mode input,
+    body.dark-mode select,
+    body.dark-mode textarea {
+      background: #334155 !important;
+      color: #e2e8f0 !important;
+      border-color: #475569 !important;
+    }
+
+    body.dark-mode .btn {
+      background: #334155 !important;
+      color: #e2e8f0 !important;
+      border-color: #475569 !important;
+    }
+
+    body.dark-mode .btn:hover {
+      background: #475569 !important;
+    }
+  </style>
 </head>
+
 <body class="bg-grad">
-    <div class="bg-food" aria-hidden="true">
-        <span class="food" style="left:5%;top:12%">🍕</span>
-        <span class="food slow" style="right:8%;top:22%">☕</span>
-        <span class="food fast" style="left:10%;bottom:18%">🍔</span>
-        <span class="food" style="right:6%;bottom:12%">🍜</span>
+  <div class="bg-food" aria-hidden="true">
+    <span class="food" style="left:5%;top:12%">🍕</span>
+    <span class="food slow" style="right:8%;top:22%">☕</span>
+    <span class="food fast" style="left:10%;bottom:18%">🍔</span>
+    <span class="food" style="right:6%;bottom:12%">🍜</span>
+  </div>
+  <!-- Marquee for active offers -->
+  <div id="offerMarquee"
+    style="display:none;background:linear-gradient(135deg, #FF6B6B, #FFB347);color:#fff;padding:12px 0;text-align:center;font-weight:700;font-size:16px;box-shadow:0 2px 10px rgba(0,0,0,0.1);position:relative;z-index:1000;">
+    <marquee behavior="scroll" direction="left" style="padding:0 20px;">
+      <span id="offerMarqueeText"></span>
+    </marquee>
+  </div>
+  <div class="topbar">
+    <div class="left">
+      <button id="toggleSidebar" class="hamburger">☰</button>
+      <div class="brand">🍽️ MMCOE</div>
     </div>
-    <!-- Marquee for active offers -->
-    <div id="offerMarquee" style="display:none;background:linear-gradient(135deg, #FF6B6B, #FFB347);color:#fff;padding:12px 0;text-align:center;font-weight:700;font-size:16px;box-shadow:0 2px 10px rgba(0,0,0,0.1);position:relative;z-index:1000;">
-        <marquee behavior="scroll" direction="left" style="padding:0 20px;">
-            <span id="offerMarqueeText"></span>
-        </marquee>
-    </div>
-    <div class="topbar">
-        <div class="left">
-            <button id="toggleSidebar" class="hamburger">☰</button>
-            <div class="brand">🍽️ MMCOE</div>
+    <div class="right" style="position:relative;display:flex;align-items:center;gap:8px">
+      <a id="notifBell" href="javascript:void(0)" class="notif-bell" onclick="toggleNotifPanel()">🔔<span
+          id="notifBadge" class="notif-badge">0</span></a>
+      <div id="notifPanel" class="notif-panel"></div>
+      <a id="topProfileLink" href="/customer/profile"
+        style="color:#e5e7eb;text-decoration:none;font-weight:700;padding:8px 10px;border-radius:8px;display:none">Profile</a>
+      <a id="topCartLink" href="/customer/cart"
+        style="position:relative;color:#e5e7eb;text-decoration:none;font-weight:700;padding:8px 10px;border-radius:8px;display:none">
+        🛒 Cart
+        <span id="cartCountBadge"
+          style="position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;border-radius:999px;padding:0 6px;font-size:12px;line-height:18px;display:none">0</span>
+        <span id="cartTotalBadge" style="margin-left:8px;color:#cbd5e1;font-weight:600;display:none">₹0</span>
+      </a>
+      <button id="darkModeToggleBtn" onclick="toggleDarkModeGlobal()"
+        style="background:transparent;border:1px solid rgba(255,255,255,0.3);color:#e5e7eb;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:18px"
+        title="Toggle Dark Mode">🌙</button>
+      <!-- Profile Avatar Dropdown -->
+      <div id="profileDropdownContainer" style="position:relative;display:none">
+        <button id="profileAvatarBtn" onclick="toggleProfileDropdown()"
+          style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg, #667eea, #764ba2);color:#fff;border:none;font-weight:700;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.2)">?</button>
+        <div id="profileDropdown"
+          style="display:none;position:absolute;top:50px;right:0;background:white;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);min-width:200px;z-index:10001;overflow:hidden">
+          <div style="padding:16px;border-bottom:1px solid #eaecf3">
+            <div id="profileName" style="font-weight:700;color:#000000;margin-bottom:4px">User</div>
+            <div id="profileEmail" style="font-size:13px;color:#000000">user@example.com</div>
+          </div>
+          <a href="/customer/profile" id="profileLink"
+            style="display:block;padding:12px 16px;color:#000000;text-decoration:none;border-bottom:1px solid #fafafe;transition:background 0.2s"
+            onmouseover="this.style.background='#f3f4f6';this.style.color='#000000'"
+            onmouseout="this.style.background='white';this.style.color='#000000'">👤 My Profile</a>
+          <a href="/logout" id="logoutLink" onclick="handleLogout()"
+            style="display:block;padding:12px 16px;color:#000000;text-decoration:none;font-weight:600;transition:background 0.2s"
+            onmouseover="this.style.background='#fee2e2';this.style.color='#000000'"
+            onmouseout="this.style.background='white';this.style.color='#000000'">🚪 Logout</a>
         </div>
-        <div class="right" style="position:relative;display:flex;align-items:center;gap:8px">
-            <a id="notifBell" href="javascript:void(0)" class="notif-bell" onclick="toggleNotifPanel()">🔔<span id="notifBadge" class="notif-badge">0</span></a>
-            <div id="notifPanel" class="notif-panel"></div>
-            <a id="topProfileLink" href="/customer/profile" style="color:#e5e7eb;text-decoration:none;font-weight:700;padding:8px 10px;border-radius:8px;display:none">Profile</a>
-            <a id="topCartLink" href="/customer/cart" style="position:relative;color:#e5e7eb;text-decoration:none;font-weight:700;padding:8px 10px;border-radius:8px;display:none">
-                🛒 Cart
-                <span id="cartCountBadge" style="position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;border-radius:999px;padding:0 6px;font-size:12px;line-height:18px;display:none">0</span>
-                <span id="cartTotalBadge" style="margin-left:8px;color:#cbd5e1;font-weight:600;display:none">₹0</span>
-            </a>
-            <button id="darkModeToggleBtn" onclick="toggleDarkModeGlobal()" style="background:transparent;border:1px solid rgba(255,255,255,0.3);color:#e5e7eb;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:18px" title="Toggle Dark Mode">🌙</button>
-            <!-- Profile Avatar Dropdown -->
-            <div id="profileDropdownContainer" style="position:relative;display:none">
-                <button id="profileAvatarBtn" onclick="toggleProfileDropdown()" style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg, #667eea, #764ba2);color:#fff;border:none;font-weight:700;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.2)">?</button>
-                <div id="profileDropdown" style="display:none;position:absolute;top:50px;right:0;background:white;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);min-width:200px;z-index:10001;overflow:hidden">
-                    <div style="padding:16px;border-bottom:1px solid #eaecf3">
-                        <div id="profileName" style="font-weight:700;color:#000000;margin-bottom:4px">User</div>
-                        <div id="profileEmail" style="font-size:13px;color:#000000">user@example.com</div>
-                    </div>
-                    <a href="/customer/profile" id="profileLink" style="display:block;padding:12px 16px;color:#000000;text-decoration:none;border-bottom:1px solid #fafafe;transition:background 0.2s" onmouseover="this.style.background='#f3f4f6';this.style.color='#000000'" onmouseout="this.style.background='white';this.style.color='#000000'">👤 My Profile</a>
-                    <a href="/logout" id="logoutLink" onclick="handleLogout()" style="display:block;padding:12px 16px;color:#000000;text-decoration:none;font-weight:600;transition:background 0.2s" onmouseover="this.style.background='#fee2e2';this.style.color='#000000'" onmouseout="this.style.background='white';this.style.color='#000000'">🚪 Logout</a>
-                </div>
-            </div>
-            <a href="/logout" class="logout-btn" style="display:none">Logout</a>
-        </div>
+      </div>
+      <a href="/logout" class="logout-btn" style="display:none">Logout</a>
     </div>
-    <div class="layout">
-        <aside id="sidebar" class="sidebar">
-            <div class="group-title">Navigation</div>
-            {% block sidenav %}
-            <a class="side-link" href="/login/customer">Customer Login</a>
-            <a class="side-link" href="/login/kitchen">Kitchen Login</a>
-            {% endblock %}
-        </aside>
-        <div id="contentWrap" class="content-wrap">
-            <div class="container">
-                {% block content %}{% endblock %}
-            </div>
-            <div class="footer">© {{  now().year if now is defined else '2025' }} MMCOE Canteen · All rights reserved</div>
-        </div>
+  </div>
+  <div class="layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="group-title">Navigation</div>
+      {% block sidenav %}{% endblock %}
+    </aside>
+    <div id="contentWrap" class="content-wrap">
+      <div class="container">
+        {% block content %}{% endblock %}
+      </div>
+      <div class="footer">© {{ now().year if now is defined else '2025' }} MMCOE Canteen · All rights reserved</div>
     </div>
-    <script src="/static/js/admin.js"></script>
-    <script>
-    (function(){
+  </div>
+  <script src="/static/js/admin.js"></script>
+  <script>
+    (function () {
       var btn = document.getElementById('toggleSidebar');
       var sb = document.getElementById('sidebar');
       var cw = document.getElementById('contentWrap');
       // Clear local session on logout click before server redirect
       var outs = document.querySelectorAll('.logout-btn');
-      outs.forEach(function(a){ a.addEventListener('click', function(){ try{ localStorage.clear(); }catch(e){} }); });
+      outs.forEach(function (a) { a.addEventListener('click', function () { try { localStorage.clear(); } catch (e) { } }); });
       var hasAuth = false;
       var isCustomer = false;
       var isOwner = false;
@@ -118,14 +145,14 @@
       try {
         var cu = localStorage.getItem('currentUser');
         hasAuth = !!token || !!cu;
-        if (cu) { 
-          var obj = JSON.parse(cu); 
-          isCustomer = (obj && obj.role === 'customer'); 
+        if (cu) {
+          var obj = JSON.parse(cu);
+          isCustomer = (obj && obj.role === 'customer');
           isOwner = (obj && obj.role === 'owner');
           isKitchen = (obj && obj.role === 'kitchen');
         }
-      } catch(e) {}
-      outs.forEach(function(a){ a.style.display = hasAuth ? '' : 'none'; });
+      } catch (e) { }
+      outs.forEach(function (a) { a.style.display = hasAuth ? '' : 'none'; });
       var prof = document.getElementById('topProfileLink');
       if (prof) prof.style.display = isCustomer ? '' : 'none';
       // Notification bell visible for customers, owners, and kitchen staff
@@ -133,7 +160,7 @@
       if (bell) bell.style.display = (isCustomer || isOwner || isKitchen) ? '' : 'none';
       var topCart = document.getElementById('topCartLink');
       if (topCart) topCart.style.display = isCustomer ? '' : 'none';
-      
+
       // Profile Avatar Dropdown
       var profileDropdownContainer = document.getElementById('profileDropdownContainer');
       var profileAvatarBtn = document.getElementById('profileAvatarBtn');
@@ -141,20 +168,20 @@
       var profileName = document.getElementById('profileName');
       var profileEmail = document.getElementById('profileEmail');
       var profileLink = document.getElementById('profileLink');
-      
+
       if (hasAuth && profileDropdownContainer && profileAvatarBtn) {
         profileDropdownContainer.style.display = 'flex';
-        
+
         // Function to update profile display
         function updateProfileDisplay(userObj) {
           if (!userObj) return;
-          
+
           var firstName = (userObj.name || 'User').charAt(0).toUpperCase();
           profileAvatarBtn.textContent = firstName;
-          
+
           if (profileName) profileName.textContent = userObj.name || 'User';
           if (profileEmail) profileEmail.textContent = userObj.email || '';
-          
+
           // Set profile link based on role
           if (profileLink) {
             if (userObj.role === 'customer') {
@@ -166,7 +193,7 @@
             }
           }
         }
-        
+
         // Get user info from localStorage first
         try {
           if (cu) {
@@ -179,15 +206,15 @@
               var authToken = localStorage.getItem('authToken') || '';
               fetch('/api/user/profile', {
                 headers: { 'Authorization': authToken ? 'Bearer ' + authToken : '' }
-              }).then(function(r) {
+              }).then(function (r) {
                 return r.json();
-              }).then(function(data) {
+              }).then(function (data) {
                 if (data && data.user) {
                   // Update localStorage with fresh data
                   localStorage.setItem('currentUser', JSON.stringify(data.user));
                   updateProfileDisplay(data.user);
                 }
-              }).catch(function(e) {
+              }).catch(function (e) {
                 console.error('Error fetching user profile:', e);
               });
             }
@@ -196,49 +223,49 @@
             var authToken = localStorage.getItem('authToken') || '';
             fetch('/api/user/profile', {
               headers: { 'Authorization': authToken ? 'Bearer ' + authToken : '' }
-            }).then(function(r) {
+            }).then(function (r) {
               return r.json();
-            }).then(function(data) {
+            }).then(function (data) {
               if (data && data.user) {
                 localStorage.setItem('currentUser', JSON.stringify(data.user));
                 updateProfileDisplay(data.user);
               }
-            }).catch(function(e) {
+            }).catch(function (e) {
               console.error('Error fetching user profile:', e);
             });
           }
-        } catch(e) {
+        } catch (e) {
           console.error('Error loading user info:', e);
           // Try to fetch from API as fallback
           var authToken = localStorage.getItem('authToken') || '';
           fetch('/api/user/profile', {
             headers: { 'Authorization': authToken ? 'Bearer ' + authToken : '' }
-          }).then(function(r) {
+          }).then(function (r) {
             return r.json();
-          }).then(function(data) {
+          }).then(function (data) {
             if (data && data.user) {
               localStorage.setItem('currentUser', JSON.stringify(data.user));
               updateProfileDisplay(data.user);
             }
-          }).catch(function(err) {
+          }).catch(function (err) {
             console.error('Error fetching user profile:', err);
           });
         }
       } else if (profileDropdownContainer) {
         profileDropdownContainer.style.display = 'none';
       }
-      
+
       // Toggle profile dropdown
-      window.toggleProfileDropdown = function(e) {
+      window.toggleProfileDropdown = function (e) {
         if (e) e.stopPropagation();
         if (profileDropdown) {
           var isOpen = profileDropdown.style.display === 'block';
           profileDropdown.style.display = isOpen ? 'none' : 'block';
-          
+
           // Close on outside click
           if (!isOpen) {
-            setTimeout(function() {
-              var closeHandler = function(e) {
+            setTimeout(function () {
+              var closeHandler = function (e) {
                 if (profileDropdownContainer && !profileDropdownContainer.contains(e.target)) {
                   profileDropdown.style.display = 'none';
                   document.removeEventListener('click', closeHandler);
@@ -249,18 +276,18 @@
           }
         }
       };
-      
+
       // Handle logout
-      window.handleLogout = function(e) {
+      window.handleLogout = function (e) {
         e.preventDefault();
         try {
           localStorage.clear();
-        } catch(err) {}
+        } catch (err) { }
         window.location.href = '/logout';
       };
-      
-      if(btn && sb && cw){
-        btn.addEventListener('click', function(){
+
+      if (btn && sb && cw) {
+        btn.addEventListener('click', function () {
           var collapsed = sb.classList.toggle('collapsed');
           if (collapsed) cw.classList.add('collapsed'); else cw.classList.remove('collapsed');
         });
@@ -269,125 +296,124 @@
       try {
         var path = location.pathname;
         var links = document.querySelectorAll('.side-link');
-        links.forEach(function(a){
+        links.forEach(function (a) {
           var href = a.getAttribute('href') || '';
           if (href && (path === href || path.startsWith(href))) {
             a.classList.add('active');
           }
         });
-      } catch(e) {}
-      
+      } catch (e) { }
+
       // Dark Mode Toggle
-      window.toggleDarkModeGlobal = function(){
+      window.toggleDarkModeGlobal = function () {
         var isDark = document.body.classList.contains('dark-mode');
-        if(isDark){
+        if (isDark) {
           document.body.classList.remove('dark-mode');
           localStorage.setItem('darkMode', 'false');
           var btn = document.getElementById('darkModeToggleBtn');
-          if(btn) btn.textContent = '🌙';
+          if (btn) btn.textContent = '🌙';
         } else {
           document.body.classList.add('dark-mode');
           localStorage.setItem('darkMode', 'true');
           var btn = document.getElementById('darkModeToggleBtn');
-          if(btn) btn.textContent = '☀️';
+          if (btn) btn.textContent = '☀️';
         }
       };
-      
+
       // Restore dark mode preference on load
       try {
         var darkMode = localStorage.getItem('darkMode') === 'true';
-        if(darkMode){
+        if (darkMode) {
           document.body.classList.add('dark-mode');
           var btn = document.getElementById('darkModeToggleBtn');
-          if(btn) btn.textContent = '☀️';
+          if (btn) btn.textContent = '☀️';
         }
-      } catch(e) {}
-      
+      } catch (e) { }
+
       // Load active offer and show marquee
-      (async function(){
-        try{
+      (async function () {
+        try {
           var response = await fetch('/api/offers/active');
           var data = await response.json();
           var marquee = document.getElementById('offerMarquee');
           var marqueeText = document.getElementById('offerMarqueeText');
-          if(data.active && marquee && marqueeText){
+          if (data.active && marquee && marqueeText) {
             var offer = data.offer;
             var text = '🎉 ' + offer.name + ' - ' + offer.discount_percent + '% OFF on all items!';
-            if(offer.description){
+            if (offer.description) {
               text += ' - ' + offer.description;
             }
             marqueeText.textContent = text;
             marquee.style.display = 'block';
-          } else if(marquee){
+          } else if (marquee) {
             marquee.style.display = 'none';
           }
-        }catch(e){
+        } catch (e) {
           console.error('Error loading offer:', e);
         }
       })();
     })();
-    </script>
-    <script>
+  </script>
+  <script>
     // Notifications UI (bell + dropdown + popup)
-    (function(){
+    (function () {
       var panel = document.getElementById('notifPanel');
       var badge = document.getElementById('notifBadge');
       var lastCount = 0;
-      function fmtTime(ts){ try{ return new Date(ts).toLocaleString(); }catch(_){ return ''; } }
-      function showPopup(msg){ 
-        var pop = document.createElement('div'); 
-        pop.style.cssText = 'position:fixed;top:20px;right:20px;background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;padding:14px 18px;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.2);z-index:10001;font-weight:700;max-width:320px;animation:slideIn 0.3s ease'; 
-        pop.textContent = msg; 
-        document.body.appendChild(pop); 
-        setTimeout(function(){ 
-          pop.style.animation='fadeOut 0.3s ease'; 
-          setTimeout(function(){ 
-            if(pop.parentNode) pop.parentNode.removeChild(pop); 
-          }, 300); 
+      function fmtTime(ts) { try { return new Date(ts).toLocaleString(); } catch (_) { return ''; } }
+      function showPopup(msg) {
+        var pop = document.createElement('div');
+        pop.style.cssText = 'position:fixed;top:20px;right:20px;background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;padding:14px 18px;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.2);z-index:10001;font-weight:700;max-width:320px;animation:slideIn 0.3s ease';
+        pop.textContent = msg;
+        document.body.appendChild(pop);
+        setTimeout(function () {
+          pop.style.animation = 'fadeOut 0.3s ease';
+          setTimeout(function () {
+            if (pop.parentNode) pop.parentNode.removeChild(pop);
+          }, 300);
         }, 4000); // Changed from 2000 to 4000 (4 seconds)
       }
-      window.toggleNotifPanel = function(){ if(!panel) return; panel.style.display = panel.style.display==='block' ? 'none' : 'block'; };
-      document.addEventListener('click', function(e){ var nb=document.getElementById('notifBell'); if(!panel||!nb) return; if(!panel.contains(e.target) && e.target!==nb) panel.style.display='none'; });
-      async function loadNotes(){
-        try{
-          var t = localStorage.getItem('authToken')||''; if(!t) return;
-          var r = await fetch('/api/notifications',{headers:{'Authorization':'Bearer '+t}});
-          var list = await r.json(); if(!Array.isArray(list)) list = [];
-          var unread = list.filter(function(n){return !n.is_read;}).length;
-          if(unread > lastCount && lastCount > 0){ var newMsgs = list.filter(function(n){return !n.is_read;}).slice(0,unread-lastCount); newMsgs.forEach(function(n){ showPopup(n.message); }); }
+      window.toggleNotifPanel = function () { if (!panel) return; panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; };
+      document.addEventListener('click', function (e) { var nb = document.getElementById('notifBell'); if (!panel || !nb) return; if (!panel.contains(e.target) && e.target !== nb) panel.style.display = 'none'; });
+      async function loadNotes() {
+        try {
+          var t = localStorage.getItem('authToken') || ''; if (!t) return;
+          var r = await fetch('/api/notifications', { headers: { 'Authorization': 'Bearer ' + t } });
+          var list = await r.json(); if (!Array.isArray(list)) list = [];
+          var unread = list.filter(function (n) { return !n.is_read; }).length;
+          if (unread > lastCount && lastCount > 0) { var newMsgs = list.filter(function (n) { return !n.is_read; }).slice(0, unread - lastCount); newMsgs.forEach(function (n) { showPopup(n.message); }); }
           lastCount = unread;
           var bell = document.getElementById('notifBell');
-          if(badge){ badge.textContent=String(unread); badge.style.display = unread>0 ? '' : 'none'; }
-          if(bell){ if(unread>0) bell.classList.add('has-notifications'); else bell.classList.remove('has-notifications'); }
-          if(panel){ panel.innerHTML = list.length? list.map(function(n){ return `<div class="notif-item ${n.is_read?'':'unread'}"><div style='font-weight:700;color:#111827'>${n.message}</div><div style='color:#64748b;font-size:.85em;margin-top:4px'>${fmtTime(n.created_at)}</div></div>`; }).join('') : '<div class="notif-item" style="color:#64748b">No notifications</div>'; }
-        }catch(e){}
+          if (badge) { badge.textContent = String(unread); badge.style.display = unread > 0 ? '' : 'none'; }
+          if (bell) { if (unread > 0) bell.classList.add('has-notifications'); else bell.classList.remove('has-notifications'); }
+          if (panel) { panel.innerHTML = list.length ? list.map(function (n) { return `<div class="notif-item ${n.is_read ? '' : 'unread'}"><div style='font-weight:700;color:#111827'>${n.message}</div><div style='color:#64748b;font-size:.85em;margin-top:4px'>${fmtTime(n.created_at)}</div></div>`; }).join('') : '<div class="notif-item" style="color:#64748b">No notifications</div>'; }
+        } catch (e) { }
       }
       var style = document.createElement('style'); style.textContent = '@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes fadeOut{from{opacity:1}to{opacity:0}}'; document.head.appendChild(style);
       loadNotes(); setInterval(loadNotes, 8000);
     })();
-    </script>
-    <script>
+  </script>
+  <script>
     // Shared cart UI updater for badge and total
-    (function(){
-      function getCart(){ try{ return JSON.parse(localStorage.getItem('cart')||'[]'); }catch(_){ return []; } }
-      function formatINR(n){ try{ return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n); } catch(_){ return '₹'+n; } }
-      window.updateCartUI = function(){
+    (function () {
+      function getCart() { try { return JSON.parse(localStorage.getItem('cart') || '[]'); } catch (_) { return []; } }
+      function formatINR(n) { try { return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n); } catch (_) { return '₹' + n; } }
+      window.updateCartUI = function () {
         var cart = getCart();
         var count = 0, total = 0;
-        for (var i=0;i<cart.length;i++){ count += (cart[i].quantity||0); total += (cart[i].price||0) * (cart[i].quantity||0); }
+        for (var i = 0; i < cart.length; i++) { count += (cart[i].quantity || 0); total += (cart[i].price || 0) * (cart[i].quantity || 0); }
         var badge = document.getElementById('cartCountBadge');
         var totalEl = document.getElementById('cartTotalBadge');
-        if (badge){ badge.textContent = String(count); badge.style.display = count>0 ? '' : 'none'; }
-        if (totalEl){ totalEl.textContent = formatINR(total); totalEl.style.display = count>0 ? '' : 'none'; }
+        if (badge) { badge.textContent = String(count); badge.style.display = count > 0 ? '' : 'none'; }
+        if (totalEl) { totalEl.textContent = formatINR(total); totalEl.style.display = count > 0 ? '' : 'none'; }
       };
       // Initialize once DOM is ready
-      try { window.updateCartUI(); } catch(e){}
+      try { window.updateCartUI(); } catch (e) { }
       // Also update on storage changes (another tab)
-      window.addEventListener('storage', function(ev){ if(ev && ev.key==='cart'){ try{ window.updateCartUI(); }catch(e){} } });
+      window.addEventListener('storage', function (ev) { if (ev && ev.key === 'cart') { try { window.updateCartUI(); } catch (e) { } } });
     })();
-    </script>
-    {% block extra_content %}{% endblock %}
+  </script>
+  {% block extra_content %}{% endblock %}
 </body>
+
 </html>
-
-

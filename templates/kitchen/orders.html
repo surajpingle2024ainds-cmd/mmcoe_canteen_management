@@ -1,888 +1,1168 @@
 {% extends 'base_kitchen.html' %}
 {% block title %}Kitchen Orders{% endblock %}
 {% block content %}
-<div class="card">
-    <h2 class="section-title">📦 Kitchen Orders</h2>
-    <div id="kitchenOrdersRoot">Loading...</div>
-</div>
-
-<!-- Simple Voice Assistant Controls -->
-<div class="voice-controls">
-    <div id="voiceControlPanel" class="voice-control-panel collapsed">
-        <div class="voice-control-header">
-            <h4>🎤 Voice Assistant</h4>
-            <span id="voice-listening-indicator" class="voice-status">🔇 Not listening</span>
-        </div>
-        <div class="voice-buttons">
-            <button id="voiceEnableBtn" class="voice-btn voice-btn-primary">
-                <span>🔊</span>
-                <span id="voiceEnableText">Enable Voice</span>
-            </button>
-            <button id="voiceListenBtn" class="voice-btn voice-btn-secondary" disabled>
-                <span>🎤</span>
-                <span>Start Listening</span>
-            </button>
-            <button id="voiceHelpBtn" class="voice-btn voice-btn-secondary">
-                <span>❓</span>
-                <span>Voice Commands</span>
-            </button>
-            <button id="voiceCloseBtn" class="voice-btn voice-btn-danger">
-                <span>✕</span>
-                <span>Close</span>
-            </button>
-        </div>
-        <div class="voice-help-text">
-            <strong>Quick Commands:</strong>
-            <ul class="voice-commands-list">
-                <li>"What orders" - List all orders</li>
-                <li>"First order ready" - Mark first order ready</li>
-                <li>"Complete order two" - Mark second order complete</li>
-                <li>"Order one ready" - Mark order one ready</li>
-                <li>"How many orders" - Get order count</li>
-            </ul>
-        </div>
-    </div>
-    <button id="voiceToggleBtn" class="voice-toggle-btn" title="Voice Assistant">
-        🎤
-    </button>
-</div>
 
 <style>
-.voice-controls {
-    position: fixed !important;
-    bottom: 20px !important;
-    right: 20px !important;
-    z-index: 1000 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 12px !important;
-    align-items: flex-end !important;
-}
+    /* ───── Top Bar ───── */
+    .view-toggle-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
 
-.voice-control-panel {
-    background: #ffffff !important;
-    border-radius: 16px !important;
-    padding: 24px !important;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.15) !important;
-    border: 2px solid #e5e7eb !important;
-    min-width: 320px !important;
-    max-width: 380px !important;
-}
+    .view-btn {
+        padding: 10px 22px;
+        border: 2px solid #e5e7eb;
+        background: white;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #6b7280;
+        font-family: inherit;
+    }
 
-.voice-control-panel.collapsed {
-    display: none !important;
-}
+    .view-btn.active {
+        background: linear-gradient(135deg, #f97316, #ef4444);
+        color: white;
+        border-color: transparent;
+        box-shadow: 0 4px 14px rgba(249, 115, 22, .35);
+    }
 
-.voice-control-header {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    margin-bottom: 16px !important;
-    padding-bottom: 14px !important;
-    border-bottom: 2px solid #f3f4f6 !important;
-}
+    .view-btn:hover:not(.active) {
+        border-color: #f97316;
+        color: #f97316;
+    }
 
-.voice-control-header h4 {
-    margin: 0 !important;
-    font-size: 18px !important;
-    font-weight: 700 !important;
-    color: #111827 !important;
-}
+    .order-count-badge {
+        background: #fef3c7;
+        color: #d97706;
+        border-radius: 20px;
+        padding: 5px 14px;
+        font-weight: 800;
+        font-size: 14px;
+        margin-left: auto;
+    }
 
-.voice-status {
-    font-size: 12px !important;
-    padding: 6px 14px !important;
-    border-radius: 20px !important;
-    font-weight: 600 !important;
-    background: #f3f4f6 !important;
-    color: #6b7280 !important;
-    white-space: nowrap !important;
-    transition: all 0.3s ease !important;
-}
+    .refresh-btn {
+        padding: 9px 16px;
+        background: #f0fdf4;
+        border: 2px solid #86efac;
+        border-radius: 10px;
+        color: #16a34a;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 13px;
+        font-family: inherit;
+    }
 
-.voice-status.active {
-    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
-    color: white !important;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3) !important;
-}
+    .refresh-btn:hover {
+        background: #dcfce7;
+    }
 
-.voice-buttons {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 10px !important;
-}
+    /* ───── Individual view ───── */
+    .order-card {
+        background: white;
+        border-radius: 16px;
+        padding: 18px;
+        margin-bottom: 14px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+        border-left: 5px solid #e5e7eb;
+        animation: slideIn .3s ease;
+    }
 
-.voice-btn {
-    padding: 14px 20px !important;
-    border: none !important;
-    border-radius: 10px !important;
-    font-weight: 600 !important;
-    font-size: 15px !important;
-    cursor: pointer !important;
-    transition: all 0.2s ease !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 10px !important;
-    width: 100% !important;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
-}
+    .order-card.vip {
+        border-left-color: #f59e0b;
+        background: #fffbeb;
+    }
 
-.voice-btn:active {
-    transform: scale(0.95) !important;
-}
+    .order-card.s-pending,
+    .order-card.s-accepted {
+        border-left-color: #3b82f6;
+    }
 
-.voice-btn-primary {
-    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
-    color: white !important;
-}
+    .order-card.s-preparing {
+        border-left-color: #f97316;
+    }
 
-.voice-btn-primary:hover {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4) !important;
-}
+    .order-card.s-ready {
+        border-left-color: #10b981;
+    }
 
-.voice-btn-primary.active {
-    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-}
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px)
+        }
 
-.voice-btn-secondary {
-    background: #f3f4f6 !important;
-    color: #374151 !important;
-}
+        to {
+            opacity: 1;
+            transform: translateY(0)
+        }
+    }
 
-.voice-btn-secondary:hover {
-    background: #e5e7eb !important;
-    transform: translateY(-1px) !important;
-}
+    .order-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12px;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
 
-.voice-btn-danger {
-    background: linear-gradient(135deg, #fee2e2, #fecaca) !important;
-    color: #dc2626 !important;
-}
+    .order-id {
+        font-size: 20px;
+        font-weight: 800;
+        color: #111827;
+    }
 
-.voice-btn-danger:hover {
-    background: linear-gradient(135deg, #fecaca, #fca5a5) !important;
-    transform: translateY(-2px) !important;
-}
+    .order-meta {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+    }
 
-.voice-btn:disabled {
-    opacity: 0.5 !important;
-    cursor: not-allowed !important;
-}
+    .badge {
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 700;
+    }
 
-.voice-toggle-btn {
-    width: 64px !important;
-    height: 64px !important;
-    border-radius: 50% !important;
-    border: 3px solid white !important;
-    background: linear-gradient(135deg, #10b981, #059669) !important;
-    color: white !important;
-    font-size: 28px !important;
-    cursor: pointer !important;
-    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.5) !important;
-    transition: all 0.3s ease !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
+    .b-vip {
+        background: #fef3c7;
+        color: #d97706;
+    }
 
-.voice-toggle-btn:hover {
-    transform: scale(1.15) !important;
-    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.6) !important;
-}
+    .b-pending {
+        background: #dbeafe;
+        color: #2563eb;
+    }
 
-.voice-toggle-btn:active {
-    transform: scale(0.95) !important;
-}
+    .b-accepted {
+        background: #dbeafe;
+        color: #2563eb;
+    }
 
-.voice-toggle-btn.listening {
-    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-    animation: pulse-ring 2s infinite !important;
-}
+    .b-preparing {
+        background: #ffedd5;
+        color: #ea580c;
+    }
 
-@keyframes pulse-ring {
-    0% { box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4); }
-    50% { box-shadow: 0 4px 24px rgba(239, 68, 68, 0.6), 0 0 0 8px rgba(239, 68, 68, 0.1); }
-    100% { box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4); }
-}
+    .b-ready {
+        background: #dcfce7;
+        color: #16a34a;
+    }
 
-.voice-help-text {
-    font-size: 13px !important;
-    color: #6b7280 !important;
-    margin-top: 16px !important;
-    padding-top: 16px !important;
-    border-top: 2px solid #f3f4f6 !important;
-}
+    .b-delivered {
+        background: #f1f5f9;
+        color: #64748b;
+    }
 
-.voice-help-text strong {
-    color: #111827 !important;
-    display: block !important;
-    margin-bottom: 8px !important;
-}
+    .order-items-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 14px;
+    }
 
-.voice-commands-list {
-    font-size: 13px !important;
-    color: #4b5563 !important;
-    margin-top: 12px !important;
-    padding-left: 20px !important;
-    list-style: none !important;
-}
+    .item-chip {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+    }
 
-.voice-commands-list li {
-    margin: 8px 0 !important;
-    padding: 6px 0 6px 8px !important;
-    position: relative !important;
-}
+    .item-chip .qty {
+        background: #e0e7ff;
+        color: #3730a3;
+        border-radius: 6px;
+        padding: 2px 7px;
+        margin-left: 6px;
+        font-size: 13px;
+    }
 
-.voice-commands-list li:before {
-    content: "▶" !important;
-    position: absolute !important;
-    left: -14px !important;
-    color: #3b82f6 !important;
-    font-size: 10px !important;
-}
+    .order-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding-top: 12px;
+        border-top: 1px solid #f1f5f9;
+    }
+
+    .order-total {
+        font-size: 18px;
+        font-weight: 800;
+        color: #374151;
+    }
+
+    .order-time {
+        font-size: 12px;
+        color: #9ca3af;
+    }
+
+    .order-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .btn-step {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all .2s;
+        font-family: inherit;
+    }
+
+    .btn-start {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+    }
+
+    .btn-complete {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+    }
+
+    .btn-expire {
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        color: white;
+    }
+
+    .btn-step:hover:not(:disabled) {
+        transform: translateY(-2px);
+        filter: brightness(1.05);
+    }
+
+    .btn-step:disabled {
+        opacity: .4;
+        cursor: not-allowed;
+    }
+
+    .btn-step.btn-ghost {
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        color: #374151;
+    }
+
+    .btn-step.btn-ghost:hover {
+        background: #f1f5f9;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 50px 20px;
+        color: #9ca3af;
+    }
+
+    .empty-state .ei {
+        font-size: 56px;
+        margin-bottom: 14px;
+    }
+
+    .empty-state p {
+        font-size: 17px;
+        font-weight: 600;
+    }
+
+    /* ───── Compact Stack View ───── */
+    #compactView {
+        display: none;
+    }
+
+    .compact-summary-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(135deg, #1e293b, #334155);
+        border-radius: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, .15);
+    }
+
+    .compact-summary-bar h3 {
+        font-size: 18px;
+        font-weight: 800;
+        color: white;
+        margin: 0;
+    }
+
+    .compact-stat {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .compact-stat.stat-dishes {
+        background: rgba(59, 130, 246, .2);
+        color: #93c5fd;
+    }
+
+    .compact-stat.stat-new {
+        background: rgba(249, 115, 22, .25);
+        color: #fdba74;
+        animation: pulseGlow 2s infinite;
+    }
+
+    .compact-stat.stat-told {
+        background: rgba(16, 185, 129, .2);
+        color: #6ee7b7;
+    }
+
+    @keyframes pulseGlow {
+
+        0%,
+        100% {
+            box-shadow: 0 0 0 0 rgba(249, 115, 22, .3);
+        }
+
+        50% {
+            box-shadow: 0 0 0 6px rgba(249, 115, 22, 0);
+        }
+    }
+
+    .compact-actions {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+    }
+
+    .notify-all-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        font-family: inherit;
+        background: linear-gradient(135deg, #f97316, #ef4444);
+        color: white;
+        font-weight: 800;
+        font-size: 13px;
+        box-shadow: 0 4px 14px rgba(249, 115, 22, .3);
+        transition: all .2s;
+    }
+
+    .notify-all-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(249, 115, 22, .4);
+    }
+
+    .notify-all-btn.done {
+        background: linear-gradient(135deg, #10b981, #059669);
+        box-shadow: 0 4px 14px rgba(16, 185, 129, .3);
+    }
+
+    .new-banner {
+        background: linear-gradient(135deg, #fff7ed, #ffedd5);
+        border: 2px solid #fb923c;
+        border-radius: 14px;
+        padding: 14px 18px;
+        margin-bottom: 16px;
+        font-weight: 700;
+        font-size: 14px;
+        color: #9a3412;
+        display: none;
+        animation: pulseBanner 2s infinite;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .new-banner .banner-icon {
+        font-size: 22px;
+        animation: bellRing 1s ease infinite;
+    }
+
+    @keyframes bellRing {
+
+        0%,
+        100% {
+            transform: rotate(0);
+        }
+
+        15% {
+            transform: rotate(14deg);
+        }
+
+        30% {
+            transform: rotate(-14deg);
+        }
+
+        45% {
+            transform: rotate(8deg);
+        }
+
+        60% {
+            transform: rotate(-8deg);
+        }
+
+        75% {
+            transform: rotate(0);
+        }
+    }
+
+    @keyframes pulseBanner {
+
+        0%,
+        100% {
+            box-shadow: 0 0 0 0 rgba(251, 146, 60, .4);
+        }
+
+        50% {
+            box-shadow: 0 0 0 8px rgba(251, 146, 60, 0);
+        }
+    }
+
+    /* Stack grid */
+    .stack-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
+    }
+
+    .stack-card {
+        background: white;
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, .06);
+        border: 2px solid #e2e8f0;
+        transition: all .3s ease;
+        animation: slideIn .35s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stack-card::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        border-radius: 18px 18px 0 0;
+        opacity: 0;
+        transition: opacity .3s;
+    }
+
+    .stack-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, .1);
+    }
+
+    .stack-card:hover::after {
+        opacity: 1;
+    }
+
+    /* ── Untold (fresh, needs attention) ── */
+    .stack-card.is-untold {
+        border-color: #f97316;
+        box-shadow: 0 4px 20px rgba(249, 115, 22, .15);
+    }
+
+    .stack-card.is-untold::after {
+        opacity: 1;
+        background: linear-gradient(90deg, #f97316, #ef4444);
+    }
+
+    /* ── Told (greyed out, acknowledged) ── */
+    .stack-card.is-told {
+        background: #f8fafc;
+        border-color: #d1d5db;
+        opacity: .75;
+    }
+
+    .stack-card.is-told:hover {
+        opacity: 1;
+    }
+
+    .stack-card.is-told .stack-qty-circle {
+        background: linear-gradient(135deg, #9ca3af, #6b7280) !important;
+        box-shadow: 0 4px 12px rgba(107, 114, 128, .3) !important;
+    }
+
+    .stack-card.is-told::after {
+        opacity: 1;
+        background: linear-gradient(90deg, #10b981, #059669);
+    }
+
+    /* ── Told BUT has new additions ── */
+    .stack-card.is-told.has-new {
+        opacity: 1;
+        border-color: #f59e0b;
+        background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    }
+
+    .stack-card.is-told.has-new::after {
+        background: linear-gradient(90deg, #f59e0b, #f97316);
+        opacity: 1;
+    }
+
+    /* New badge on told card */
+    .new-arrival-badge {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: linear-gradient(135deg, #f97316, #ef4444);
+        color: white;
+        border-radius: 20px;
+        padding: 4px 12px;
+        font-size: 12px;
+        font-weight: 800;
+        box-shadow: 0 3px 10px rgba(249, 115, 22, .4);
+        animation: popIn .4s ease;
+        z-index: 2;
+    }
+
+    @keyframes popIn {
+        0% {
+            transform: scale(0);
+            opacity: 0;
+        }
+
+        60% {
+            transform: scale(1.15);
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    /* Told label */
+    .told-label {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: #dcfce7;
+        color: #15803d;
+        border-radius: 20px;
+        padding: 4px 12px;
+        font-size: 11px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .stack-card-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+
+    .stack-icon-wrap {
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        flex-shrink: 0;
+    }
+
+    .stack-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .stack-name {
+        font-size: 16px;
+        font-weight: 800;
+        color: #111827;
+        margin-bottom: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .stack-order-count {
+        font-size: 12px;
+        color: #6b7280;
+        font-weight: 600;
+    }
+
+    .stack-qty-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .stack-qty-circle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #f97316, #ef4444);
+        color: white;
+        font-size: 26px;
+        font-weight: 900;
+        box-shadow: 0 4px 16px rgba(249, 115, 22, .35);
+        flex-shrink: 0;
+    }
+
+    .stack-qty-breakdown {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 13px;
+    }
+
+    .qty-told-line {
+        color: #6b7280;
+        font-weight: 600;
+    }
+
+    .qty-new-line {
+        color: #ea580c;
+        font-weight: 800;
+        animation: pulseText 2s infinite;
+    }
+
+    @keyframes pulseText {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: .7;
+        }
+    }
+
+    .stack-orders {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-bottom: 14px;
+    }
+
+    .order-ref {
+        background: #f1f5f9;
+        border-radius: 8px;
+        padding: 3px 10px;
+        font-weight: 700;
+        font-size: 11px;
+        cursor: pointer;
+        color: #475569;
+        transition: all .2s;
+        border: 1px solid transparent;
+    }
+
+    .order-ref:hover {
+        background: #e0e7ff;
+        color: #3730a3;
+        border-color: #c7d2fe;
+    }
+
+    .stack-footer {
+        display: flex;
+        gap: 8px;
+    }
+
+    .btn-tell {
+        flex: 1;
+        padding: 11px;
+        border: none;
+        border-radius: 12px;
+        font-family: inherit;
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all .25s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .btn-tell:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(59, 130, 246, .4);
+    }
+
+    .btn-tell.notified {
+        background: #e5e7eb;
+        color: #6b7280;
+        box-shadow: none;
+    }
+
+    .btn-tell.notified:hover {
+        background: #d1d5db;
+        box-shadow: none;
+        transform: none;
+    }
+
+    /* Acknowledge new button */
+    .btn-ack {
+        flex: 1;
+        padding: 11px;
+        border: none;
+        border-radius: 12px;
+        font-family: inherit;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all .25s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        animation: pulseGlow 2s infinite;
+    }
+
+    .btn-ack:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(245, 158, 11, .4);
+    }
 </style>
 
-<script>
-// Simple Voice Assistant - All inline to avoid loading issues
-(function() {
-    'use strict';
-    
-    const token = localStorage.getItem('authToken') || '';
-    let isVoiceEnabled = false;
-    let isListening = false;
-    let recognition = null;
-    let synthesis = window.speechSynthesis;
-    
-    // Initialize Speech Recognition
-    let isSpeaking = false;
-    let lastCommand = '';
-    let lastCommandTime = 0;
-    
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
-        
-        recognition.onresult = function(event) {
-            // Only process final results, skip if we're speaking (to avoid feedback)
-            if (isSpeaking) {
-                console.log('Skipping command - assistant is speaking');
-                return;
-            }
-            
-            // Get the last final result
-            const result = event.results[event.results.length - 1];
-            if (result.isFinal) {
-                const transcript = result[0].transcript.trim().toLowerCase();
-                
-                // Filter out very short commands (likely noise)
-                if (transcript.length < 3) {
-                    console.log('Skipping short command:', transcript);
-                    return;
-                }
-                
-                // Filter out common assistant responses
-                if (transcript.includes('i did not understand') || 
-                    transcript.includes('say help') ||
-                    transcript.includes('voice assistant') ||
-                    transcript.includes('you can say')) {
-                    console.log('Skipping assistant feedback:', transcript);
-                    return;
-                }
-                
-                // Debounce: ignore duplicate or very similar commands within 2 seconds
-                const now = Date.now();
-                const timeSinceLastCommand = now - lastCommandTime;
-                const isSimilar = lastCommand && (
-                    transcript === lastCommand || 
-                    transcript.includes(lastCommand) || 
-                    lastCommand.includes(transcript) ||
-                    transcript.length > 5 && lastCommand.length > 5 && 
-                    transcript.substring(0, Math.min(5, transcript.length)) === lastCommand.substring(0, Math.min(5, lastCommand.length))
-                );
-                
-                if (isSimilar && timeSinceLastCommand < 2000) {
-                    console.log('Skipping duplicate command:', transcript);
-                    return;
-                }
-                
-                lastCommand = transcript;
-                lastCommandTime = now;
-                
-                console.log('Voice command:', transcript);
-                handleVoiceCommand(transcript);
-            }
-        };
-        
-        recognition.onerror = function(event) {
-            console.error('Speech recognition error:', event.error);
-            if (event.error === 'no-speech' || event.error === 'audio-capture') {
-                // Restart if there was an audio issue
-                if (isListening && !isSpeaking) {
-                    setTimeout(() => {
-                        if (isListening && recognition && !isSpeaking) {
-                            try {
-                                recognition.start();
-                            } catch(e) {}
-                        }
-                    }, 500);
-                }
-            }
-        };
-        
-        recognition.onend = function() {
-            if (isListening && !isSpeaking) {
-                setTimeout(() => {
-                    if (isListening && recognition && !isSpeaking) {
-                        try {
-                            recognition.start();
-                        } catch(e) {}
-                    }
-                }, 300);
-            }
-        };
-    }
-    
-    // Voice functions
-    function speak(text) {
-        if (!isVoiceEnabled || !text) return;
-        
-        // Temporarily stop listening while speaking to avoid feedback
-        const wasListening = isListening;
-        if (wasListening && recognition) {
-            try {
-                recognition.stop();
-            } catch(e) {}
-        }
-        isSpeaking = true;
-        
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.1;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        
-        utterance.onend = function() {
-            isSpeaking = false;
-            // Resume listening after speaking
-            if (wasListening && isListening && recognition) {
-                setTimeout(() => {
-                    if (isListening && recognition && !isSpeaking) {
-                        try {
-                            recognition.start();
-                        } catch(e) {}
-                    }
-                }, 500);
-            }
-        };
-        
-        utterance.onerror = function() {
-            isSpeaking = false;
-            // Resume listening after error
-            if (wasListening && isListening && recognition) {
-                setTimeout(() => {
-                    if (isListening && recognition && !isSpeaking) {
-                        try {
-                            recognition.start();
-                        } catch(e) {}
-                    }
-                }, 500);
-            }
-        };
-        
-        synthesis.speak(utterance);
-    }
-    
-    function updateIndicator(listening) {
-        const indicator = document.getElementById('voice-listening-indicator');
-        if (indicator) {
-            indicator.textContent = listening ? '🎤 Listening...' : '🔇 Not listening';
-            indicator.classList.toggle('active', listening);
-        }
-    }
-    
-    function handleVoiceCommand(transcript) {
-        const cmd = transcript.toLowerCase().trim();
-        
-        // Stop listening command
-        if ((cmd.includes('stop') && cmd.includes('listen')) || cmd === 'stop') {
-            stopListening();
-            return;
-        }
-        
-        // Help command (check early)
-        if (cmd === 'help' || cmd.includes('help')) {
-            speak('Commands: What orders, How many orders, Show order number, Mark order number ready.');
-            return;
-        }
-        
-        // What orders / Show orders / List orders
-        if ((cmd.includes('what') && cmd.includes('order')) || 
-            (cmd.includes('show') && cmd.includes('order')) ||
-            (cmd === 'orders' || cmd === 'what orders' || cmd === 'show orders')) {
-            fetch('/api/kitchen/orders/live', {
-                headers: { 'Authorization': token ? 'Bearer ' + token : '' }
-            })
-            .then(r => r.json())
-            .then(orders => {
-                if (Array.isArray(orders) && orders.length > 0) {
-                    speak(`You have ${orders.length} active orders.`);
-                } else {
-                    speak('There are no pending orders.');
-                }
-            });
-            return;
-        }
-        
-        // How many orders
-        if ((cmd.includes('how many') && cmd.includes('order')) || cmd === 'how many orders') {
-            fetch('/api/kitchen/orders/live', {
-                headers: { 'Authorization': token ? 'Bearer ' + token : '' }
-            })
-            .then(r => r.json())
-            .then(orders => {
-                if (Array.isArray(orders)) {
-                    speak(`You have ${orders.length} orders.`);
-                }
-            });
-            return;
-        }
-        
-        // Show order details (e.g., "show order 123" or "order 123")
-        const orderMatch = cmd.match(/(?:show|get|order|tell\s*me\s*about)\s*(\d+)/);
-        if (orderMatch) {
-            const orderId = parseInt(orderMatch[1]);
-            fetch('/api/kitchen/orders/live', {
-                headers: { 'Authorization': token ? 'Bearer ' + token : '' }
-            })
-            .then(r => r.json())
-            .then(orders => {
-                const order = orders.find(o => o.db_id === orderId || o.id === orderId);
-                if (order) {
-                    const items = (order.items || []).map(i => `${i.quantity} ${i.name}`).join(', ');
-                    speak(`Order ${orderId}. Items: ${items}. Total: ${order.total} rupees.`);
-                } else {
-                    speak(`Order ${orderId} not found.`);
-                }
-            });
-            return;
-        }
-        
-        // Update order status using position/number (e.g., "first order ready", "order one ready", "complete order two")
-        // Match patterns like: "first/second/third/one/two/three order ready/complete/preparing"
-        const positionWords = {
-            'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5, 'sixth': 6, 'seventh': 7, 'eighth': 8,
-            'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8,
-            '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8
-        };
-        
-        // Try matching position-based commands: "first order ready", "order one ready", "complete order two"
-        const positionMatch = cmd.match(/(?:mark|set|make|update|complete)?\s*(?:order\s*)?(first|second|third|fourth|fifth|sixth|seventh|eighth|one|two|three|four|five|six|seven|eight|\d+)\s*(?:order\s*)?(?:as\s*)?(ready|preparing|pending|delivered|complete|completed|done)/i);
-        if (positionMatch) {
-            const positionWord = positionMatch[1].toLowerCase();
-            const positionNum = positionWords[positionWord] || parseInt(positionWord);
-            let status = positionMatch[2].toLowerCase();
-            
-            // Map status words
-            if (status === 'complete' || status === 'completed' || status === 'done') {
-                status = 'delivered';
-            }
-            
-            // Fetch orders and get the order at that position
-            fetch('/api/kitchen/orders/live', {
-                headers: { 'Authorization': token ? 'Bearer ' + token : '' }
-            })
-            .then(r => r.json())
-            .then(orders => {
-                if (!Array.isArray(orders) || orders.length === 0) {
-                    speak('No orders available.');
-                    return;
-                }
-                
-                // Filter and sort: VIP/important first, then by creation time
-                const vip_orders = orders.filter(o => o.is_vip || (o.kitchen_notes && o.kitchen_notes.includes('[IMPORTANT]')));
-                const regular_orders = orders.filter(o => !o.is_vip && (!o.kitchen_notes || !o.kitchen_notes.includes('[IMPORTANT]')));
-                const sortedOrders = [...vip_orders, ...regular_orders];
-                
-                if (positionNum < 1 || positionNum > sortedOrders.length) {
-                    speak(`Order ${positionWord} not found. There are ${sortedOrders.length} orders.`);
-                    return;
-                }
-                
-                const targetOrder = sortedOrders[positionNum - 1];
-                const dbId = targetOrder.db_id || targetOrder.id;
-                const displayId = targetOrder.id || targetOrder.order_id || 'order';
-                
-                // Update the order status
-                fetch(`/api/kitchen/orders/${dbId}/status`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': token ? 'Bearer ' + token : '',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ status: status })
-                })
-                .then(r => {
-                    if (r.ok) {
-                        speak(`${displayId} marked ${status}.`);
-                        // Reload orders after a delay by dispatching event
-                        setTimeout(() => {
-                            window.dispatchEvent(new CustomEvent('orderStatusUpdated'));
-                        }, 500);
-                    } else {
-                        speak(`Failed to update ${displayId}.`);
-                    }
-                })
-                .catch(err => {
-                    console.error('Error updating order:', err);
-                    speak(`Error updating order.`);
-                });
-            })
-            .catch(err => {
-                console.error('Error fetching orders:', err);
-                speak('Error fetching orders.');
-            });
-            return;
-        }
-        
-        // Don't speak errors to avoid feedback loop - just log
-        console.log('Unrecognized command:', cmd);
-    }
-    
-    function startListening() {
-        if (!recognition) {
-            alert('Voice recognition not supported. Use Chrome or Edge.');
-            return;
-        }
-        if (!isVoiceEnabled) {
-            alert('Please enable voice first.');
-            return;
-        }
-        try {
-            recognition.start();
-            isListening = true;
-            updateIndicator(true);
-            const btn = document.getElementById('voiceListenBtn');
-            if (btn) {
-                btn.innerHTML = '<span>🔇</span><span>Stop Listening</span>';
-                btn.classList.remove('voice-btn-secondary');
-                btn.classList.add('voice-btn-danger');
-            }
-            const toggleBtn = document.getElementById('voiceToggleBtn');
-            if (toggleBtn) toggleBtn.classList.add('listening');
-            speak('Voice assistant activated. I am listening.');
-        } catch (e) {
-            console.error('Error starting recognition:', e);
-        }
-    }
-    
-    function stopListening() {
-        if (recognition && isListening) {
-            recognition.stop();
-            isListening = false;
-            updateIndicator(false);
-            const btn = document.getElementById('voiceListenBtn');
-            if (btn) {
-                btn.innerHTML = '<span>🎤</span><span>Start Listening</span>';
-                btn.classList.remove('voice-btn-danger');
-                btn.classList.add('voice-btn-secondary');
-            }
-            const toggleBtn = document.getElementById('voiceToggleBtn');
-            if (toggleBtn) toggleBtn.classList.remove('listening');
-        }
-    }
-    
-    function cancelAllSpeech() {
-        // Cancel any ongoing or queued speech immediately
-        if (synthesis.speaking) {
-            synthesis.cancel();
-        }
-        isSpeaking = false;
-    }
-    
-    function disableVoice() {
-        // Stop all speech immediately
-        cancelAllSpeech();
-        
-        // Stop listening if active
-        if (recognition && isListening) {
-            try {
-                recognition.stop();
-            } catch(e) {}
-            isListening = false;
-        }
-        
-        // Update state
-        isVoiceEnabled = false;
-        isSpeaking = false;
-        
-        // Update UI
-        const btn = document.getElementById('voiceEnableBtn');
-        const text = document.getElementById('voiceEnableText');
-        const listenBtn = document.getElementById('voiceListenBtn');
-        const toggleBtn = document.getElementById('voiceToggleBtn');
-        const indicator = document.getElementById('voice-listening-indicator');
-        
-        if (btn) {
-            btn.classList.remove('active');
-            btn.classList.remove('voice-btn-danger');
-            btn.classList.add('voice-btn-primary');
-        }
-        if (text) text.textContent = 'Enable Voice';
-        if (listenBtn) {
-            listenBtn.disabled = true;
-            listenBtn.style.opacity = '0.5';
-            listenBtn.innerHTML = '<span>🎤</span><span>Start Listening</span>';
-            listenBtn.classList.remove('voice-btn-danger');
-            listenBtn.classList.add('voice-btn-secondary');
-        }
-        if (toggleBtn) toggleBtn.classList.remove('listening');
-        if (indicator) {
-            indicator.textContent = '🔇 Not listening';
-            indicator.classList.remove('active');
-        }
-    }
-    
-    // Button handlers
-    document.getElementById('voiceToggleBtn').addEventListener('click', function() {
-        const panel = document.getElementById('voiceControlPanel');
-        if (panel) panel.classList.toggle('collapsed');
-    });
-    
-    document.getElementById('voiceCloseBtn').addEventListener('click', function() {
-        const panel = document.getElementById('voiceControlPanel');
-        if (panel) panel.classList.add('collapsed');
-    });
-    
-    document.getElementById('voiceEnableBtn').addEventListener('click', function() {
-        const btn = this;
-        btn.style.transform = 'scale(0.95)';
-        setTimeout(() => btn.style.transform = '', 150);
-        
-        if (isVoiceEnabled) {
-            // Disable voice - cancel all speech and stop listening immediately
-            disableVoice();
-        } else {
-            // Enable voice
-            isVoiceEnabled = true;
-            btn.classList.add('active');
-            btn.classList.remove('voice-btn-primary');
-            btn.classList.add('voice-btn-danger');
-            document.getElementById('voiceEnableText').textContent = 'Disable Voice';
-            document.getElementById('voiceListenBtn').disabled = false;
-            document.getElementById('voiceListenBtn').style.opacity = '1';
-            speak('Voice assistant enabled.');
-        }
-    });
-    
-    document.getElementById('voiceListenBtn').addEventListener('click', function() {
-        const btn = this;
-        btn.style.transform = 'scale(0.95)';
-        setTimeout(() => btn.style.transform = '', 150);
-        
-        if (isListening) {
-            stopListening();
-        } else {
-            startListening();
-        }
-    });
-    
-    document.getElementById('voiceHelpBtn').addEventListener('click', function() {
-        const btn = this;
-        btn.style.transform = 'scale(0.95)';
-        setTimeout(() => btn.style.transform = '', 150);
-        
-        if (!isVoiceEnabled) {
-            isVoiceEnabled = true;
-            document.getElementById('voiceEnableBtn').click();
-        }
-        speak('You can say: What orders, How many orders, Show order number, Mark order number as ready, Stop listening.');
-    });
-    
-    // Check for new orders
-    let lastOrderCount = 0;
-    let knownOrders = new Set();
-    
-    function checkNewOrders() {
-        if (!isVoiceEnabled) return;
-        
-        fetch('/api/kitchen/orders/live', {
-            headers: { 'Authorization': token ? 'Bearer ' + token : '' }
-        })
-        .then(r => r.json())
-        .then(orders => {
-            if (!Array.isArray(orders)) return;
-            
-            const currentOrderIds = new Set(orders.map(o => o.db_id || o.id));
-            
-            if (lastOrderCount === 0) {
-                knownOrders = currentOrderIds;
-                lastOrderCount = orders.length;
-                return;
-            }
-            
-            if (orders.length > lastOrderCount) {
-                orders.forEach(order => {
-                    const orderId = order.db_id || order.id;
-                    if (!knownOrders.has(orderId)) {
-                        const items = (order.items || []).map(i => `${i.quantity} ${i.name}`).join(', ');
-                        const vip = order.is_vip ? ' VIP order. ' : '';
-                        speak(`New order received. ${vip}Order number ${order.id}. Items: ${items}. Total: ${order.total} rupees.`);
-                        knownOrders.add(orderId);
-                    }
-                });
-            }
-            
-            knownOrders = currentOrderIds;
-            lastOrderCount = orders.length;
-        })
-        .catch(err => console.error('Error checking new orders:', err));
-    }
-    
-    // Start checking for new orders when voice is enabled
-    const enableBtn = document.getElementById('voiceEnableBtn');
-    if (enableBtn) {
-        enableBtn.addEventListener('click', function() {
-            setTimeout(() => {
-                if (isVoiceEnabled) {
-                    setInterval(checkNewOrders, 5000);
-                }
-            }, 1000);
-        });
-    }
-})();
+<!-- TOP BAR -->
+<div class="view-toggle-bar">
+    <button class="view-btn active" id="btnIndividual" onclick="switchView('individual')">📋 Individual Orders</button>
+    <button class="view-btn" id="btnCompact" onclick="switchView('compact')">📦 Compact Stack</button>
+    <div class="order-count-badge" id="orderCountBadge">— Orders</div>
+    <button class="refresh-btn" onclick="loadOrders(true)">🔄 Refresh</button>
+</div>
 
-// Orders loading code (existing)
-(function(){
-  const token = localStorage.getItem('authToken') || '';
-  async function load(){
-    try {
-      const res = await fetch('/api/kitchen/orders/live', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
-      const orders = await res.json();
-      const root = document.getElementById('kitchenOrdersRoot');
-      if (!Array.isArray(orders) || orders.length === 0) { root.textContent = 'No orders.'; return; }
-      const vip_orders = orders.filter(o=>o.is_vip||(o.kitchen_notes&&o.kitchen_notes.includes('[IMPORTANT]')));
-      const regular_orders = orders.filter(o=>!o.is_vip&&(!o.kitchen_notes||!o.kitchen_notes.includes('[IMPORTANT]')));
-      root.innerHTML = (vip_orders.length ? '<div style="font-weight:800;color:var(--primary);margin-bottom:12px;padding:8px;background:#fff3cd;border-radius:8px;border-left:4px solid var(--primary)">⭐ VIP / IMPORTANT ORDERS</div>' : '') + vip_orders.map(o => {
-        const s = (o.status||'').toLowerCase();
-        let label = '';
-        if (s==='pending' || s==='accepted') label = 'Start Preparing';
-        else if (s==='preparing') label = 'Mark Completed';
-        else if (s==='ready') label = 'Expire Coupon';
-        else label = 'Completed';
-        const disabled = (s==='delivered') ? 'disabled' : '';
-        return `
-        <div style="border-bottom:1px solid #eee;padding:10px 0;border-left:4px solid var(--primary);padding-left:12px;background:#fff3cd;">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div><strong>#${o.id}</strong> — ₹${o.total} ${o.is_vip ? '<span class="badge accepted">VIP</span>' : ''} ${(o.kitchen_notes&&o.kitchen_notes.includes('[IMPORTANT]')) ? '<span class="badge preparing">IMPORTANT</span>' : ''}</div>
-            <div style="display:flex;gap:6px;align-items:center;">
-              <button class="btn ghost" onclick="showIngredients(${o.db_id})">📋 Ingredients</button>
-              <button class="btn" ${disabled} onclick="step(${o.db_id}, '${s}')">${label}</button>
-            </div>
-          </div>
-          <div style="color:#777;margin-top:6px;">${(o.items||[]).map(i=>`${i.icon||''} ${i.name} x${i.quantity}`).join(', ')}</div>
-          <div id="ingredients_${o.db_id}" style="margin-top:12px;display:none;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb;"></div>
-        </div>`;
-      }).join('') + (regular_orders.length ? '<div style="font-weight:800;color:#64748b;margin-top:20px;margin-bottom:12px;padding:8px">Regular Orders</div>' : '') + regular_orders.map(o => {
-        const s = (o.status||'').toLowerCase();
-        let label = '';
-        if (s==='pending' || s==='accepted') label = 'Start Preparing';
-        else if (s==='preparing') label = 'Mark Completed';
-        else if (s==='ready') label = 'Expire Coupon';
-        else label = 'Completed';
-        const disabled = (s==='delivered') ? 'disabled' : '';
-        return `
-        <div style="border-bottom:1px solid #eee;padding:10px 0;">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div><strong>#${o.id}</strong> — ₹${o.total}</div>
-            <div style="display:flex;gap:6px;align-items:center;">
-              <button class="btn ghost" onclick="showIngredients(${o.db_id})">📋 Ingredients</button>
-              <button class="btn" ${disabled} onclick="step(${o.db_id}, '${s}')">${label}</button>
-            </div>
-          </div>
-          <div style="color:#777;margin-top:6px;">${(o.items||[]).map(i=>`${i.icon||''} ${i.name} x${i.quantity}`).join(', ')}</div>
-          <div id="ingredients_${o.db_id}" style="margin-top:12px;display:none;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb;"></div>
-        </div>`;
-      }).join('');
-    } catch(e) { document.getElementById('kitchenOrdersRoot').textContent = 'Failed to load.'; }
-  }
-  window.step = async function(id, s){
-    try{
-      let next = null;
-      if(s==='pending' || s==='accepted') next = 'preparing';
-      else if(s==='preparing') next = 'ready';
-      else if(s==='ready') next = 'delivered';
-      if(!next) return;
-      await fetch(`/api/kitchen/orders/${id}/status`, { method:'PUT', headers: { 'Authorization': token ? 'Bearer ' + token : '', 'Content-Type':'application/json' }, body: JSON.stringify({status: next}) });
-      load();
-    }catch(e){ /* no-op */ }
-  };
-  
-  window.showIngredients = async function(orderId){
-    const ingDiv = document.getElementById('ingredients_' + orderId);
-    if(!ingDiv) return;
-    
-    if(ingDiv.style.display === 'none' || ingDiv.style.display === ''){
-      ingDiv.style.display = 'block';
-      ingDiv.innerHTML = 'Loading ingredients checklist...';
-      
-      try{
-        const response = await fetch('/api/advanced/orders/' + orderId + '/ingredients', {
-          headers: {'Authorization': token ? 'Bearer ' + token : ''}
-        });
-        const data = await response.json();
-        
-        if(data.ingredients && data.ingredients.length > 0){
-          ingDiv.innerHTML = `
-            <div style="font-weight:700;margin-bottom:12px;color:#1e40af;">📋 Ingredient Checklist</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
-              ${data.ingredients.map(function(ing){
-                return `
-                  <div style="padding:8px;background:#fff;border-radius:8px;border:1px solid #e5e7eb;">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                      <input type="checkbox" style="width:18px;height:18px;cursor:pointer;" onchange="updateIngredientCheck(this, '${ing.name}')">
-                      <span style="flex:1;"><strong>${ing.name}</strong></span>
-                      <span style="color:#64748b;">x${ing.quantity}</span>
-                    </label>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-            <div style="margin-top:12px;padding:8px;background:#dbeafe;border-radius:8px;color:#1e40af;">
-              <strong>Total Items:</strong> ${data.total_items} items in this order
-            </div>
-          `;
-        } else {
-          ingDiv.innerHTML = '<div style="color:#64748b;">No ingredient information available.</div>';
+<!-- INDIVIDUAL VIEW -->
+<div id="individualView">
+    <div id="indivRoot">
+        <div class="empty-state">
+            <div class="ei">🍳</div>
+            <p>Loading...</p>
+        </div>
+    </div>
+</div>
+
+<!-- COMPACT VIEW -->
+<div id="compactView">
+    <div class="compact-summary-bar">
+        <h3>📦 Dish Stack</h3>
+        <div class="compact-stat stat-dishes" id="statDishes">🍽️ 0 dishes</div>
+        <div class="compact-stat stat-new" id="statNew" style="display:none">🔔 <span id="newCount">0</span> new</div>
+        <div class="compact-stat stat-told" id="statTold">✅ 0 told</div>
+        <div class="compact-actions">
+            <button class="notify-all-btn" id="notifyAllBtn" onclick="markAllTold()">📣 Tell All to Chef</button>
+        </div>
+    </div>
+    <div class="new-banner" id="newBanner" style="display:none">
+        <span class="banner-icon">🔔</span>
+        <span><strong id="newBannerCount">0</strong> new items arrived! Review and tell the chef.</span>
+    </div>
+    <div class="stack-grid" id="stackRoot">
+        <div class="empty-state">
+            <div class="ei">🍳</div>
+            <p>Loading...</p>
+        </div>
+    </div>
+</div>
+
+
+
+<script>
+    'use strict';
+
+    // ─── STATE ───────────────────────────────────────────────────────
+    const token = localStorage.getItem('authToken') || '';
+    let allOrders = [];
+    let currentView = 'individual';
+    // Track told quantities per dish: { dishName: qty_told_to_chef }
+    let toldQtyMap = JSON.parse(localStorage.getItem('k_told_qty') || '{}');
+
+    // ─── HELPERS ─────────────────────────────────────────────────────
+    // Normalize an item regardless of which API shape returned it
+    function itemName(i) { return i.name || i.item_name || (i.menu_item && i.menu_item.name) || 'Unknown'; }
+    function itemIcon(i) { return i.icon || (i.menu_item && i.menu_item.icon) || '🍽️'; }
+    function itemQty(i) { return Number(i.quantity || i.qty || 1); }
+    function orderId(o) { return o.db_id || o.id || o.order_id; }
+    function orderDisplay(o) { return o.id || o.order_id || o.db_id; }
+
+    // Build stacked dish map: { dishName → { name, icon, qty, orders:[{id,dbId}] } }
+    function buildStack(orders) {
+        const map = {};
+        for (const o of orders) {
+            const items = o.items || o.order_items || [];
+            for (const i of items) {
+                const name = itemName(i);
+                if (!map[name]) map[name] = { name, icon: itemIcon(i), qty: 0, orders: [] };
+                map[name].qty += itemQty(i);
+                map[name].orders.push({ id: orderDisplay(o), dbId: orderId(o) });
+            }
         }
-      }catch(e){
-        ingDiv.innerHTML = '<div style="color:#ef4444;">Failed to load ingredients.</div>';
-      }
-    } else {
-      ingDiv.style.display = 'none';
+        return Object.values(map).sort((a, b) => b.qty - a.qty);
     }
-  };
-  
-  window.updateIngredientCheck = function(checkbox, ingredientName){
-    if(checkbox.checked){
-      checkbox.parentElement.style.textDecoration = 'line-through';
-      checkbox.parentElement.style.opacity = '0.6';
-    } else {
-      checkbox.parentElement.style.textDecoration = '';
-      checkbox.parentElement.style.opacity = '1';
+
+    // ─── FETCH & REFRESH ─────────────────────────────────────────────
+    async function loadOrders(manual = false) {
+        try {
+            const r = await fetch('/api/kitchen/orders/live', {
+                headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+            });
+            const data = await r.json();
+            allOrders = Array.isArray(data) ? data : [];
+        } catch (e) { allOrders = []; }
+
+        const badge = document.getElementById('orderCountBadge');
+        if (badge) badge.textContent = allOrders.length + (allOrders.length === 1 ? ' Order' : ' Orders');
+
+        renderCurrentView();
     }
-  };
-  load();
-  setInterval(load, 8000);
-  
-  // Listen for order status updates
-  window.addEventListener('orderStatusUpdated', () => {
-    load();
-  });
-})();
+
+    function renderCurrentView() {
+        if (currentView === 'individual') renderIndividual();
+        else renderCompact();
+    }
+
+    // ─── VIEW SWITCHER ────────────────────────────────────────────────
+    function switchView(v) {
+        currentView = v;
+        document.getElementById('individualView').style.display = v === 'individual' ? 'block' : 'none';
+        document.getElementById('compactView').style.display = v === 'compact' ? 'block' : 'none';
+        document.getElementById('btnIndividual').classList.toggle('active', v === 'individual');
+        document.getElementById('btnCompact').classList.toggle('active', v === 'compact');
+        renderCurrentView();
+    }
+
+    // ─── INDIVIDUAL VIEW ──────────────────────────────────────────────
+    function renderIndividual() {
+        const root = document.getElementById('indivRoot');
+        if (!allOrders.length) {
+            root.innerHTML = `<div class="empty-state"><div class="ei">✅</div><p>No pending orders</p></div>`;
+            return;
+        }
+
+        const vip = allOrders.filter(o => o.is_vip || (o.kitchen_notes && o.kitchen_notes.includes('[IMPORTANT]')));
+        const regular = allOrders.filter(o => !vip.includes(o));
+
+        function makeCard(o) {
+            const s = (o.status || 'pending').toLowerCase();
+            const dbId = orderId(o);
+            const dispId = orderDisplay(o);
+            const items = o.items || o.order_items || [];
+            const chips = items.map(i =>
+                `<div class="item-chip">${itemIcon(i)} ${itemName(i)}<span class="qty">×${itemQty(i)}</span></div>`
+            ).join('');
+
+            let btnLabel = '', btnClass = '', dis = '';
+            if (['pending', 'accepted'].includes(s)) { btnLabel = 'Start Preparing'; btnClass = 'btn-start'; }
+            else if (s === 'preparing') { btnLabel = 'Mark Ready'; btnClass = 'btn-complete'; }
+            else if (s === 'ready') { btnLabel = 'Expire Coupon'; btnClass = 'btn-expire'; }
+            else { btnLabel = 'Done'; dis = 'disabled'; }
+
+            const statusBadge = `<span class="badge b-${s}">${s.charAt(0).toUpperCase() + s.slice(1)}</span>`;
+            const vipBadge = o.is_vip ? `<span class="badge b-vip">⭐ VIP</span>` : '';
+            const created = o.created_at ? new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+            return `<div class="order-card ${o.is_vip ? 'vip' : ''} s-${s}" id="ocard-${dbId}">
+            <div class="order-card-header">
+                <div>
+                    <div class="order-id">#${dispId}</div>
+                    <div class="order-meta">${statusBadge}${vipBadge}</div>
+                </div>
+                <div class="order-actions">
+                    <button class="btn-step btn-ghost" onclick="toggleIng(${dbId})">📋</button>
+                    <button class="btn-step ${btnClass}" ${dis} onclick="stepOrder(${dbId},'${s}',this)">${btnLabel}</button>
+                </div>
+            </div>
+            <div class="order-items-list">${chips}</div>
+            <div id="ing-${dbId}" style="display:none;background:#f8fafc;border-radius:10px;padding:12px;margin-bottom:10px;font-size:13px"></div>
+            <div class="order-card-footer">
+                <div class="order-total">₹${o.total || o.total_amount || 0}</div>
+                <div class="order-time">🕐 ${created}</div>
+            </div>
+        </div>`;
+        }
+
+        let html = '';
+        if (vip.length) html += `<div style="font-weight:800;color:#d97706;margin-bottom:10px">⭐ VIP / Priority (${vip.length})</div>` + vip.map(makeCard).join('');
+        if (regular.length) html += `<div style="font-weight:800;color:#64748b;margin:${vip.length ? '16px' : 0} 0 10px">📋 Regular Orders (${regular.length})</div>` + regular.map(makeCard).join('');
+        root.innerHTML = html;
+    }
+
+    async function stepOrder(dbId, curStatus, btn) {
+        const statusMap = { pending: 'preparing', accepted: 'preparing', preparing: 'ready', ready: 'delivered' };
+        const newStatus = statusMap[curStatus];
+        if (!newStatus) return;
+        btn.disabled = true; btn.textContent = '...';
+        try {
+            const r = await fetch(`/api/kitchen/orders/${dbId}/status`, {
+                method: 'PUT',
+                headers: { 'Authorization': token ? 'Bearer ' + token : '', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            if (r.ok) {
+                if (newStatus === 'delivered') {
+                    allOrders = allOrders.filter(o => orderId(o) !== dbId);
+                    document.getElementById(`ocard-${dbId}`)?.remove();
+                    document.getElementById('orderCountBadge').textContent =
+                        allOrders.length + (allOrders.length === 1 ? ' Order' : ' Orders');
+                    if (currentView === 'compact') renderCompact();
+                } else {
+                    await loadOrders();
+                }
+            } else {
+                btn.disabled = false; btn.textContent = 'Retry';
+            }
+        } catch (e) { btn.disabled = false; btn.textContent = 'Error'; }
+    }
+
+    function toggleIng(dbId) {
+        const el = document.getElementById(`ing-${dbId}`);
+        if (!el) return;
+        if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+        el.style.display = 'block';
+        const order = allOrders.find(o => orderId(o) === dbId);
+        if (order) {
+            const items = order.items || order.order_items || [];
+            el.innerHTML = items.map(i =>
+                `<div style="padding:4px 0;border-bottom:1px solid #e2e8f0">
+                ${itemIcon(i)} <strong>${itemName(i)}</strong> ×${itemQty(i)} — ₹${i.price || 0}
+             </div>`
+            ).join('') || '<em>No items found.</em>';
+        }
+    }
+
+    // ─── COMPACT STACK VIEW ───────────────────────────────────────────
+    function renderCompact() {
+        const root = document.getElementById('stackRoot');
+        const banner = document.getElementById('newBanner');
+        const statNew = document.getElementById('statNew');
+
+        if (!allOrders.length) {
+            root.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="ei">✅</div><p>No pending orders</p></div>`;
+            banner.style.display = 'none';
+            statNew.style.display = 'none';
+            document.getElementById('statDishes').innerHTML = '🍽️ 0 dishes';
+            document.getElementById('statTold').innerHTML = '✅ 0 told';
+            document.getElementById('notifyAllBtn').classList.remove('done');
+            document.getElementById('notifyAllBtn').innerHTML = '📣 Tell All to Chef';
+            return;
+        }
+
+        const stack = buildStack(allOrders);
+
+        if (!stack.length) {
+            root.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="ei">🤔</div><p>Orders have no items yet</p></div>`;
+            return;
+        }
+
+        // Clean up toldQtyMap: remove dishes no longer in stack
+        const currentNames = new Set(stack.map(d => d.name));
+        for (const k of Object.keys(toldQtyMap)) {
+            if (!currentNames.has(k)) delete toldQtyMap[k];
+        }
+
+        // Calculate stats
+        let totalNewItems = 0;
+        let toldCount = 0;
+        const dishData = stack.map(dish => {
+            const toldQty = toldQtyMap[dish.name] || 0;
+            const newQty = Math.max(0, dish.qty - toldQty);
+            const isTold = toldQty > 0;
+            const hasNew = isTold && newQty > 0;
+            const isFullyTold = isTold && newQty === 0;
+            if (newQty > 0) totalNewItems += newQty;
+            if (isFullyTold) toldCount++;
+            return { ...dish, toldQty, newQty, isTold, hasNew, isFullyTold };
+        });
+
+        // Update summary stats
+        document.getElementById('statDishes').innerHTML = `🍽️ ${stack.length} dish${stack.length !== 1 ? 'es' : ''}`;
+        document.getElementById('statTold').innerHTML = `✅ ${toldCount} told`;
+
+        if (totalNewItems > 0) {
+            statNew.style.display = '';
+            document.getElementById('newCount').textContent = totalNewItems;
+            banner.style.display = 'flex';
+            document.getElementById('newBannerCount').textContent = totalNewItems;
+        } else {
+            statNew.style.display = 'none';
+            banner.style.display = 'none';
+        }
+
+        // Sort: untold first, then told-with-new, then fully told
+        dishData.sort((a, b) => {
+            const pri = d => d.isFullyTold ? 2 : (d.hasNew ? 1 : 0);
+            return pri(a) - pri(b) || b.qty - a.qty;
+        });
+
+        root.innerHTML = dishData.map(dish => {
+            const safeKey = dish.name.replace(/[^a-z0-9]/gi, '_');
+            const refs = dish.orders.map(o =>
+                `<span class="order-ref" onclick="goToOrder(${o.dbId})">#${o.id}</span>`
+            ).join('');
+
+            // Determine card classes
+            let cardClass = 'stack-card';
+            if (dish.isFullyTold) cardClass += ' is-told';
+            else if (dish.hasNew) cardClass += ' is-told has-new';
+            else cardClass += ' is-untold';
+
+            // Badge
+            let badgeHtml = '';
+            if (dish.hasNew) {
+                badgeHtml = `<div class="new-arrival-badge">+${dish.newQty} new!</div>`;
+            } else if (dish.isFullyTold) {
+                badgeHtml = `<div class="told-label">✅ Told Chef</div>`;
+            }
+
+            // Breakdown text
+            let breakdownHtml = '';
+            if (dish.hasNew) {
+                breakdownHtml = `
+                    <div class="stack-qty-breakdown">
+                        <span class="qty-told-line">✅ ${dish.toldQty} told to chef</span>
+                        <span class="qty-new-line">🔥 +${dish.newQty} new!</span>
+                    </div>`;
+            } else if (dish.isFullyTold) {
+                breakdownHtml = `
+                    <div class="stack-qty-breakdown">
+                        <span class="qty-told-line">✅ All ${dish.qty} told</span>
+                    </div>`;
+            }
+
+            // Footer button
+            let footerHtml = '';
+            if (dish.hasNew) {
+                footerHtml = `
+                    <button class="btn-ack" onclick="acknowledgeDish('${dish.name}')">
+                        📣 Tell +${dish.newQty} New to Chef
+                    </button>`;
+            } else if (dish.isFullyTold) {
+                footerHtml = `
+                    <button class="btn-tell notified" onclick="untellDish('${dish.name}')">
+                        ↩️ Undo Told
+                    </button>`;
+            } else {
+                footerHtml = `
+                    <button class="btn-tell" onclick="tellDish('${dish.name}', ${dish.qty})">
+                        📣 Tell Chef (×${dish.qty})
+                    </button>`;
+            }
+
+            return `<div class="${cardClass}" id="sc-${safeKey}">
+                ${badgeHtml}
+                <div class="stack-card-top">
+                    <div class="stack-icon-wrap">${dish.icon}</div>
+                    <div class="stack-info">
+                        <div class="stack-name">${dish.name}</div>
+                        <div class="stack-order-count">${dish.orders.length} order${dish.orders.length !== 1 ? 's' : ''}</div>
+                    </div>
+                </div>
+                <div class="stack-qty-row">
+                    <div class="stack-qty-circle">${dish.qty}</div>
+                    ${breakdownHtml}
+                </div>
+                <div class="stack-orders">${refs}</div>
+                <div class="stack-footer">${footerHtml}</div>
+            </div>`;
+        }).join('');
+
+        saveToldQty();
+        updateNotifyAllBtn(dishData);
+    }
+
+    // Tell chef about a dish (marks current qty as told)
+    function tellDish(name, qty) {
+        toldQtyMap[name] = qty;
+        saveToldQty();
+        renderCompact();
+    }
+
+    // Acknowledge new items on a told dish (updates told qty to current total)
+    function acknowledgeDish(name) {
+        const stack = buildStack(allOrders);
+        const dish = stack.find(d => d.name === name);
+        if (dish) toldQtyMap[name] = dish.qty;
+        saveToldQty();
+        renderCompact();
+    }
+
+    // Undo told status
+    function untellDish(name) {
+        delete toldQtyMap[name];
+        saveToldQty();
+        renderCompact();
+    }
+
+    // Mark all as told
+    function markAllTold() {
+        const stack = buildStack(allOrders);
+        const allDone = stack.every(d => toldQtyMap[d.name] >= d.qty);
+        if (allDone) {
+            // Undo all
+            stack.forEach(d => delete toldQtyMap[d.name]);
+        } else {
+            // Tell all
+            stack.forEach(d => toldQtyMap[d.name] = d.qty);
+        }
+        saveToldQty();
+        renderCompact();
+    }
+
+    function updateNotifyAllBtn(dishData) {
+        const btn = document.getElementById('notifyAllBtn');
+        if (!btn || !dishData.length) return;
+        const allDone = dishData.every(d => d.isFullyTold);
+        btn.classList.toggle('done', allDone);
+        btn.innerHTML = allDone ? '✅ All Told' : '📣 Tell All to Chef';
+    }
+
+    function saveToldQty() {
+        localStorage.setItem('k_told_qty', JSON.stringify(toldQtyMap));
+    }
+
+    function goToOrder(dbId) {
+        switchView('individual');
+        setTimeout(() => {
+            const el = document.getElementById(`ocard-${dbId}`);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    }
+
+
+
+    // ─── INIT ─────────────────────────────────────────────────────────
+    loadOrders();
+    setInterval(loadOrders, 10000);
 </script>
+
 {% endblock %}

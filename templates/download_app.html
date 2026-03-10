@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get ESSEN App - MMCOE Smart Canteen</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #faff6b 0%, #FFB347 50%, #fa8f8f 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 15s ease infinite;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Floating food background */
+        .bg-food { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+        .food {
+            position: absolute; font-size: 70px; opacity: 0.1;
+            animation: float 12s ease-in-out infinite;
+        }
+        .food:nth-child(2) { animation-delay: -3s; animation-duration: 14s; }
+        .food:nth-child(3) { animation-delay: -6s; animation-duration: 10s; }
+        .food:nth-child(4) { animation-delay: -9s; animation-duration: 16s; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-25px) rotate(5deg); }
+            50% { transform: translateY(-10px) rotate(-5deg); }
+            75% { transform: translateY(-30px) rotate(3deg); }
+        }
+
+        .card {
+            position: relative;
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 50px 40px;
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.15);
+            animation: slideUp 0.6s ease;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .app-icon {
+            width: 100px; height: 100px;
+            background: linear-gradient(135deg, #FF6B6B 0%, #FFB347 100%);
+            border-radius: 24px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 50px;
+            margin: 0 auto 25px;
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.3);
+            animation: bounceIn 1s ease 0.3s both;
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        h1 {
+            font-size: 2em;
+            color: #2C3E50;
+            margin-bottom: 10px;
+            font-weight: 800;
+        }
+
+        .subtitle {
+            color: #7F8C8D;
+            font-size: 1.05em;
+            margin-bottom: 35px;
+            line-height: 1.6;
+        }
+
+        .download-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #FF6B6B 0%, #FFB347 100%);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            font-size: 1.15em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 6px 25px rgba(255, 107, 107, 0.35);
+            text-decoration: none;
+            margin-bottom: 15px;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 35px rgba(255, 107, 107, 0.5);
+        }
+
+        .download-btn svg {
+            width: 24px; height: 24px; fill: white;
+        }
+
+        .coming-soon {
+            display: inline-block;
+            background: #FFF3E0;
+            color: #FF6B35;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 700;
+            margin-bottom: 25px;
+            letter-spacing: 0.5px;
+        }
+
+        .features-mini {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 30px;
+            padding-top: 25px;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .feature-mini {
+            text-align: center;
+        }
+
+        .feature-mini-icon {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+
+        .feature-mini-text {
+            font-size: 0.8em;
+            color: #7F8C8D;
+            font-weight: 600;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 25px;
+            color: #7F8C8D;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .back-link:hover { color: #FF6B6B; }
+
+        @media (max-width: 480px) {
+            .card { padding: 35px 25px; }
+            h1 { font-size: 1.6em; }
+            .features-mini { gap: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-food" aria-hidden="true">
+        <span class="food" style="left:5%;top:10%">🍕</span>
+        <span class="food" style="right:8%;top:25%">☕</span>
+        <span class="food" style="left:15%;bottom:15%">🍔</span>
+        <span class="food" style="right:10%;bottom:20%">🍜</span>
+    </div>
+
+    <div class="card">
+        <div class="app-icon">🍽️</div>
+        <h1>Get the ESSEN App</h1>
+        <p class="subtitle">Order delicious food from MMCOE canteen right from your phone. Fast, easy, and cashless!</p>
+
+        <span class="coming-soon">🚀 COMING SOON ON PLAY STORE</span>
+
+        <a href="#" class="download-btn" onclick="alert('The app will be available on Play Store soon! Stay tuned.'); return false;">
+            <svg viewBox="0 0 24 24"><path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.61 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.5,12.92 20.16,13.19L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/></svg>
+            Download from Play Store
+        </a>
+
+        <div class="features-mini">
+            <div class="feature-mini">
+                <div class="feature-mini-icon">⚡</div>
+                <div class="feature-mini-text">Quick Order</div>
+            </div>
+            <div class="feature-mini">
+                <div class="feature-mini-icon">📱</div>
+                <div class="feature-mini-text">Live Tracking</div>
+            </div>
+            <div class="feature-mini">
+                <div class="feature-mini-icon">💳</div>
+                <div class="feature-mini-text">Easy Pay</div>
+            </div>
+        </div>
+
+        <a href="/" class="back-link">← Back to Home</a>
+    </div>
+</body>
+</html>

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, render_template_string, Blueprint, render_template, redirect
+from flask import Flask, request, jsonify, send_file, render_template_string, Blueprint, render_template, redirect, make_response
 from flask_cors import CORS
 from models import db, User, MenuItem, Order, OrderItem, Coupon, PromoCode, StaffMember, Settings, Inventory, Supplier, SystemSetting, Promotion, Combo, ComboItem, Offer, DailyOrderLog
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -11,6 +11,9 @@ import uuid
 from sqlalchemy import func, desc, and_, or_
 import os
 import json
+from dotenv import load_dotenv
+
+load_dotenv()  # Load .env file
 
 app = Flask(__name__)
 
@@ -40,8 +43,11 @@ CORS(app, resources={
 })
 
 # Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///canteen_v3.db'
-app.config['SECRET_KEY'] = 'mmcoe-secret-key-2025-super-secure'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    'DATABASE_URL',
+    'mysql+pymysql://root:password@localhost:3306/canteen_db'
+)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mmcoe-secret-key-2025-super-secure')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
@@ -109,6 +115,46 @@ def get_auth_user():
 def generate_otp():
     return ''.join(random.choices(string.digits, k=4))
 
+# ==================== AUTH DECORATORS ====================
+from functools import wraps
+
+def login_required(f):
+    """Decorator: require valid JWT (from cookie or header)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.cookies.get('authToken')
+        if not token:
+            auth_header = request.headers.get('Authorization', '')
+            token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else None
+        if not token:
+            return redirect('/login/customer')
+        user_id = verify_token(token)
+        if not user_id:
+            return redirect('/login/customer')
+        return f(*args, **kwargs)
+    return decorated
+
+def role_required(*allowed_roles):
+    """Decorator: require user to have one of the allowed roles."""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            token = request.cookies.get('authToken')
+            if not token:
+                auth_header = request.headers.get('Authorization', '')
+                token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else None
+            if not token:
+                return redirect('/login/customer')
+            user_id = verify_token(token)
+            if not user_id:
+                return redirect('/login/customer')
+            user = User.query.get(user_id)
+            if not user or user.role not in allowed_roles:
+                return redirect('/login/customer')
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
 # ==================== ROUTES ====================
 
 @app.route('/', methods=['GET'])
@@ -118,7 +164,7 @@ def home():
 
 @app.route('/login/customer', methods=['GET'])
 def login_customer():
-    return render_template('login_customer.html')
+    return render_template('download_app.html')
 
 @app.route('/login/staff', methods=['GET'])
 def login_staff():
@@ -197,6 +243,7 @@ if not hasattr(User, 'referred_by'):
 admin_advanced_bp = Blueprint('admin_advanced', __name__, template_folder='templates')
 
 @app.route('/admin-advanced', methods=['GET'])
+@role_required('owner')
 def admin_advanced():
     return render_template('admin_advanced.html')
 
@@ -289,7 +336,7 @@ def signup():
         print(f"   Email: {user.email}")
         print(f"   Role: {user.role}\n")
         
-        return jsonify({
+        resp = make_response(jsonify({
             'success': True,
             'message': 'Signup successful',
             'token': token,
@@ -304,7 +351,9 @@ def signup():
                 'year': user.year,
                 'address': user.address
             }
-        }), 201
+        }), 201)
+        resp.set_cookie('authToken', token, httponly=False, samesite='Lax', max_age=7*24*3600)
+        return resp
    
 
         
@@ -350,12 +399,14 @@ def login_customer_api():
         
         print(f"\n[LOGIN] CUSTOMER LOGIN: {user.phone}")
         
-        return jsonify({
+        resp = make_response(jsonify({
             'success': True,
             'message': 'Login successful',
             'token': token,
-            'user': user.to_dict() # Assuming to_dict or manual dict construction
-        }), 200
+            'user': user.to_dict()
+        }), 200)
+        resp.set_cookie('authToken', token, httponly=False, samesite='Lax', max_age=7*24*3600)
+        return resp
         
     except Exception as e:
         print(f"Login Error: {e}")
@@ -396,7 +447,7 @@ def login_otp_api():
         token = generate_token(user.id)
         print(f"\n[LOGIN] OTP LOGIN: {user.phone}")
         
-        return jsonify({
+        resp = make_response(jsonify({
             'success': True,
             'message': 'Login successful',
             'token': token,
@@ -412,7 +463,9 @@ def login_otp_api():
                 'address': user.address,
                 'wallet_balance': getattr(user, 'wallet_balance', 0.0)
             }
-        }), 200
+        }), 200)
+        resp.set_cookie('authToken', token, httponly=False, samesite='Lax', max_age=7*24*3600)
+        return resp
         
     except Exception as e:
         print(f"OTP Login Error: {e}")
@@ -455,7 +508,7 @@ def login_staff_api():
         
         print(f"\n[LOGIN] STAFF LOGIN: {user.email} ({user.role})")
         
-        return jsonify({
+        resp = make_response(jsonify({
             'success': True,
             'message': 'Login successful',
             'token': token,
@@ -470,7 +523,9 @@ def login_staff_api():
                 'year': user.year,
                 'address': user.address
             }
-        }), 200
+        }), 200)
+        resp.set_cookie('authToken', token, httponly=False, samesite='Lax', max_age=7*24*3600)
+        return resp
         
     except Exception as e:
          print(f"Login Error: {e}")
@@ -1178,8 +1233,8 @@ def demo_pay_confirm(token):
         return jsonify({'error': 'Invalid token'}), 404
     
     # Update payment status
-        info['status'] = 'paid'
-        info['paid_at'] = datetime.utcnow().isoformat()
+    info['status'] = 'paid'
+    info['paid_at'] = datetime.utcnow().isoformat()
     info['updated_at'] = datetime.utcnow().isoformat()
     
     print(f"[PAYMENT] Confirmed: {token} - Status: PAID")
@@ -1251,8 +1306,9 @@ def register_kitchen_page():
 
 @app.route('/logout', methods=['GET'])
 def logout_page():
-    # Redirect to main app landing; client should clear session storage before navigating
-    return redirect('/app')
+    resp = make_response(redirect('/'))
+    resp.delete_cookie('authToken')
+    return resp
 
 # ==================== HEALTH ENDPOINTS ====================
 @app.route('/health', methods=['GET'])
@@ -1272,109 +1328,134 @@ def health_routes():
 # Customer pages
 @app.route('/dashboard/customer')
 @app.route('/customer/dashboard')
+@role_required('owner')
 def customer_dashboard():
-    # Show browsing menu (default view for customers)
     return render_template('customer/browse_menu.html')
 
 @app.route('/customer/browse-menu')
+@role_required('owner')
 def page_customer_browse_menu():
     return render_template('customer/browse_menu.html')
 
 @app.route('/customer/cart')
+@role_required('owner')
 def page_customer_cart():
     return render_template('customer/cart.html')
 
 @app.route('/customer/orders')
+@role_required('owner')
 def page_customer_orders():
     return render_template('customer/orders.html')
 
 @app.route('/customer/coupons')
+@role_required('owner')
 def page_customer_coupons():
     return render_template('customer/coupons.html')
 
 @app.route('/customer/history')
+@role_required('owner')
 def page_customer_history():
     return render_template('customer/history.html')
 
 @app.route('/customer/profile')
+@role_required('customer')
 def page_customer_profile():
     return render_template('customer/profile.html')
 
 @app.route('/customer/feedback')
+@role_required('customer')
 def page_customer_feedback():
     return render_template('customer/feedback.html')
 
 @app.route('/customer/advanced-features')
+@role_required('customer')
 def page_customer_advanced_features():
     return render_template('customer/advanced_features.html')
 
 # Owner pages
 @app.route('/owner/dashboard')
+@role_required('owner')
 def page_owner_dashboard():
     return render_template('owner/dashboard.html')
 
 @app.route('/owner/powerbi')
+@role_required('owner')
 def page_owner_powerbi():
     return render_template('owner/powerbi.html')
 
 @app.route('/owner/top-dishes')
+@role_required('owner')
 def page_owner_top_dishes():
     return render_template('owner/top_dishes.html')
 
 @app.route('/owner/pending-orders')
+@role_required('owner')
 def page_owner_pending_orders():
     return render_template('owner/pending_orders.html')
 
 @app.route('/owner/todays-menu')
+@role_required('owner')
 def page_owner_todays_menu():
     return render_template('owner/todays_menu.html')
 
 @app.route('/owner/kitchen')
+@role_required('owner')
 def page_owner_kitchen():
     return render_template('owner/kitchen.html')
 
 @app.route('/owner/feedback')
+@role_required('owner')
 def page_owner_feedback():
     return render_template('owner/feedback.html')
 
 @app.route('/owner/cash-order')
+@role_required('owner')
 def page_owner_cash_order():
     return render_template('owner/cash_order.html')
 
 @app.route('/owner/customer-segments')
+@role_required('owner')
 def page_owner_customer_segments():
     return render_template('owner/customer_segments.html')
 
 @app.route('/owner/history')
+@role_required('owner')
 def page_owner_history():
     return render_template('owner/history.html')
 
 @app.route('/owner/offers')
+@role_required('owner')
 def page_owner_offers():
     return render_template('owner/offers.html')
 
 @app.route('/owner/combos')
+@role_required('owner')
 def page_owner_combos():
     return render_template('owner/combos.html')
 
 @app.route('/owner/daily-orders')
+@role_required('owner')
 def page_owner_daily_orders():
     return render_template('owner/daily_orders.html')
 
 # Kitchen pages
 @app.route('/kitchen/dashboard')
+@role_required('kitchen', 'owner')
 def page_kitchen_dashboard():
     return render_template('kitchen/dashboard.html')
 
 @app.route('/kitchen/orders')
+@role_required('kitchen', 'owner')
 def page_kitchen_orders():
     return render_template('kitchen/orders.html')
 
 @app.route('/kitchen/expire-coupons')
+@role_required('kitchen', 'owner')
 def page_kitchen_expire_coupons():
     return render_template('kitchen/expire_coupons.html')
 
 @app.route('/kitchen/history')
+@role_required('kitchen', 'owner')
 def page_kitchen_history():
     return render_template('kitchen/history.html')
 
@@ -2866,6 +2947,7 @@ load(); setInterval(load, 5000);
 """
 
 @app.route('/kitchen', methods=['GET'])
+@role_required('kitchen', 'owner')
 def kitchen_portal():
     return render_template_string(KITCHEN_HTML)
 
@@ -2898,40 +2980,16 @@ async function fetchJSON(u){ try{ const r=await fetch(u,{headers:{'Authorization
 """
 
 @app.route('/admin', methods=['GET'])
+@role_required('owner')
 def admin_portal():
     return render_template_string(ADMIN_HTML)
 # ==================== INIT DATABASE ====================
 
 def init_db():
     with app.app_context():
-        # Create tables
+        # Create all tables defined in models.py
         db.create_all()
-        
-        # Add image_url column to combo table if it doesn't exist (for existing databases)
-        try:
-            import sqlite3
-            # Use the configured database file
-            conn = sqlite3.connect('canteen_v2.db')
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA table_info(combo)")
-            columns = [row[1] for row in cursor.fetchall()]
-            if 'image_url' not in columns:
-                cursor.execute('ALTER TABLE combo ADD COLUMN image_url VARCHAR(500)')
-                conn.commit()
-                print("✅ Added image_url column to combo table")
-            
-            # Add wallet_balance column to user table if it doesn't exist
-            cursor.execute("PRAGMA table_info(user)")
-            user_columns = [row[1] for row in cursor.fetchall()]
-            if 'wallet_balance' not in user_columns:
-                cursor.execute('ALTER TABLE user ADD COLUMN wallet_balance FLOAT DEFAULT 0.0')
-                conn.commit()
-                print("✅ Added wallet_balance column to user table")
-            
-            conn.close()
-        except Exception as e:
-            print(f"Note: Could not check/add columns: {e}")
-            # Columns will be added automatically on next db.create_all() if table doesn't exist
+        print("✅ Database tables created/verified")
         
         # Add menu items if empty
         if MenuItem.query.count() == 0:
@@ -3045,7 +3103,7 @@ if __name__ == '__main__':
     print("\nNOTES:")
     print("   - OTP is displayed in console (no email service required)")
     print("   - All endpoints support CORS")
-    print("   - Database: SQLite (canteen.db)")
+    print("   - Database: MySQL (canteen_db)")
     print("="*70 + "\n")
 
 print("Blueprints registered")

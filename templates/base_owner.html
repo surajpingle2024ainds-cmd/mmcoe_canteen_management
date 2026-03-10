@@ -14,11 +14,13 @@
 <a class="side-link" href="/owner/offers">🎁 Offers</a>
 <a class="side-link" href="/owner/combos">🍱 Combos</a>
 <a class="side-link" href="/owner/daily-orders">📊 Daily Orders</a>
+<div class="group-title" style="margin-top:16px">Tools</div>
+<a class="side-link" href="/customer/browse-menu" target="_blank" style="color:#FF6B35;font-weight:700">👁️ Preview
+    Customer Menu</a>
+<a class="side-link" href="/logout" onclick="try{localStorage.clear();}catch(e){}" style="color:#ef4444">🚪 Logout</a>
 {% endblock %}
 {% block content %}{{ super() }}{% endblock %}
 
 <script>
-(function(){ var sb=document.getElementById('sidebar'); if(sb) sb.classList.add('theme-owner'); })();
+    (function () { var sb = document.getElementById('sidebar'); if (sb) sb.classList.add('theme-owner'); })();
 </script>
-
-
