@@ -6,6 +6,7 @@ db = SQLAlchemy()
 # --- Models (move all from app.py here) ---
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    firebase_uid = db.Column(db.String(255), unique=True, nullable=True, index=True)  # Firebase Auth UID
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     phone = db.Column(db.String(10), unique=True, nullable=False)
@@ -23,6 +24,7 @@ class User(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'firebase_uid': self.firebase_uid,
             'name': self.name,
             'email': self.email,
             'role': self.role,
@@ -30,7 +32,6 @@ class User(db.Model):
             'college_id': self.college_id,
             'department': self.department,
             'year': self.year,
-            'address': self.address,
             'is_vip': self.is_vip,
             'wallet_balance': self.wallet_balance
         }

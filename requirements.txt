@@ -17,5 +17,8 @@ Werkzeug>=3.0.0
 # HTTP Requests (used in utils/route_monitor.py)
 requests>=2.31.0
 
+# Firebase Admin SDK (server-side ID token verification)
+firebase-admin>=6.0.0
+
 # Smooth server
 gunicorn

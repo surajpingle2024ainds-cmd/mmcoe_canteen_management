@@ -12,8 +12,124 @@ from sqlalchemy import func, desc, and_, or_
 import os
 import json
 from dotenv import load_dotenv
+import firebase_admin
+from firebase_admin import credentials, auth as firebase_auth
 
 load_dotenv()  # Load .env file
+
+# =============================================================================
+# FIREBASE AUTH — the ONLY auth mechanism for the Flutter mobile app
+#
+# Flutter sends:  Authorization: Bearer <firebase_id_token>
+# Backend calls:  verify_firebase_id_token(token) → decoded payload → user
+#
+# JWT (HS256) is kept ONLY for the browser staff portal (login_staff.html).
+# The Flutter app never uses or stores HS256 JWTs.
+#
+# ── To fix properly (one-time, 2 minutes) ────────────────────────────────────
+#   1. Firebase Console → Project Settings → Service Accounts
+#   2. Click "Generate new private key" → download JSON
+#   3. Save as ./firebase-credentials.json  (same folder as app.py)
+#
+# ── Dev shortcut (no service account file) ───────────────────────────────────
+#   Add  FIREBASE_SKIP_VERIFY=true  to .env
+#   This trusts token claims without signature verification. Dev only!
+# =============================================================================
+
+_firebase_creds_path = os.environ.get('FIREBASE_CREDENTIALS_PATH', './firebase-credentials.json')
+_firebase_project_id = os.environ.get('FIREBASE_PROJECT_ID', '')
+_skip_verify         = os.environ.get('FIREBASE_SKIP_VERIFY', 'false').lower() == 'true'
+_firebase_admin_ok   = False
+
+if os.path.exists(_firebase_creds_path):
+    try:
+        _cred = credentials.Certificate(_firebase_creds_path)
+        firebase_admin.initialize_app(_cred)
+        _firebase_admin_ok = True
+        print(f"[FIREBASE] ✅ Admin SDK initialized from {_firebase_creds_path}")
+    except Exception as e:
+        print(f"[FIREBASE] ⚠️  {_firebase_creds_path} is invalid: {e}")
+        print(f"[FIREBASE]    → Get the real file: Firebase Console → Project Settings → Service Accounts → Generate new private key")
+        try:
+            firebase_admin.initialize_app()
+        except Exception:
+            pass
+else:
+    print(f"[FIREBASE] ⚠️  {_firebase_creds_path} not found.")
+    print(f"[FIREBASE]    → Get it: Firebase Console → Project Settings → Service Accounts → Generate new private key")
+    try:
+        firebase_admin.initialize_app()
+    except Exception:
+        pass
+
+if _skip_verify:
+    print(f"[FIREBASE] ⚠️  FIREBASE_SKIP_VERIFY=true — signature check DISABLED (dev only!)")
+
+import base64 as _base64
+import time as _time
+
+
+def _decode_token_claims_only(id_token: str) -> dict:
+    """Decode token payload WITHOUT verifying signature. Dev/fallback only."""
+    parts = id_token.split('.')
+    if len(parts) != 3:
+        raise ValueError("Malformed token: expected 3 parts")
+    padded = parts[1] + '=' * (4 - len(parts[1]) % 4)
+    payload = json.loads(_base64.urlsafe_b64decode(padded))
+    now = _time.time()
+    if payload.get('exp', 0) < now:
+        raise ValueError("Firebase token has expired")
+    if payload.get('aud') != _firebase_project_id:
+        raise ValueError(
+            f"Token audience mismatch: got '{payload.get('aud')}', "
+            f"expected '{_firebase_project_id}'. "
+            f"Check FIREBASE_PROJECT_ID in .env"
+        )
+    if payload.get('iss') != f"https://securetoken.google.com/{_firebase_project_id}":
+        raise ValueError(f"Token issuer mismatch: {payload.get('iss')}")
+    if not payload.get('sub'):
+        raise ValueError("Token missing 'sub' claim")
+    payload['uid'] = payload['sub']
+    return payload
+
+
+def verify_firebase_id_token(id_token: str) -> dict:
+    """
+    Verify a Firebase ID Token and return the decoded payload.
+
+    Priority:
+      1. Admin SDK  (requires firebase-credentials.json)  — full signature check
+      2. FIREBASE_SKIP_VERIFY=true                        — claims only, no signature (dev)
+      3. Neither → raises with a clear actionable message
+
+    Also fast-rejects HS256 tokens (internal staff JWT) immediately.
+    """
+    # Fast-reject legacy HS256 staff tokens — not Firebase tokens
+    try:
+        hdr_raw = id_token.split('.')[0] + '=='
+        hdr = json.loads(_base64.urlsafe_b64decode(hdr_raw))
+        if hdr.get('alg', '').upper() == 'HS256':
+            raise ValueError("Not a Firebase token (HS256 internal JWT)")
+    except ValueError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Unreadable token header: {e}")
+
+    if _firebase_admin_ok:
+        return firebase_auth.verify_id_token(id_token)
+
+    if _skip_verify:
+        payload = _decode_token_claims_only(id_token)
+        print(f"[FIREBASE] ⚠️  Dev mode: claims accepted without signature (uid={payload.get('uid')})")
+        return payload
+
+    raise ValueError(
+        "Cannot verify Firebase token: firebase-credentials.json not found and "
+        "FIREBASE_SKIP_VERIFY is not enabled.\n"
+        "  Option A (recommended): download service account JSON from Firebase Console\n"
+        "  Option B (dev only):    add FIREBASE_SKIP_VERIFY=true to .env"
+    )
+
 
 app = Flask(__name__)
 
@@ -78,39 +194,59 @@ def verify_token(token):
         return None
 
 def get_auth_user():
+    """
+    Authenticate any API request.
+
+    Flutter mobile app  → sends Firebase ID Token (RS256)
+                          → verified via verify_firebase_id_token()
+                          → looks up user by firebase_uid
+
+    Browser staff portal → sends internal HS256 JWT (from /api/auth/login/staff)
+                          → verified via verify_token()
+                          → looks up user by id
+    """
     try:
         auth_header = request.headers.get('Authorization', '')
-        if not auth_header:
-            print(f"[AUTH] No Authorization header found")
+        if not auth_header.startswith('Bearer '):
             return None
-        
-        token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else auth_header
-        
+
+        token = auth_header[7:].strip()
         if not token:
-            print(f"[AUTH] No token found in Authorization header")
             return None
-        
-        print(f"[AUTH] Token extracted (first 20 chars): {token[:20]}...")
+
+        # ── Try 1: Firebase ID Token (Flutter mobile app) ────────────────────
+        try:
+            decoded = verify_firebase_id_token(token)
+            uid = decoded.get('uid')
+            if uid:
+                user = User.query.filter_by(firebase_uid=uid).first()
+                if user:
+                    print(f"[AUTH] ✅ Firebase: {user.name} (uid: {uid[:8]}...)")
+                    return user
+                print(f"[AUTH] ⚠️  firebase_uid {uid[:8]}... not in DB — needs google-login first")
+                return None
+        except ValueError:
+            pass  # HS256 token or claim mismatch — fall through to JWT check
+        except Exception as e:
+            print(f"[AUTH] Firebase check error: {e}")
+
+        # ── Try 2: Internal HS256 JWT (browser staff/owner portal) ───────────
         user_id = verify_token(token)
-        
         if not user_id:
-            print(f"[AUTH] Token verification failed")
             return None
-        
-        print(f"[AUTH] Token verified - User ID: {user_id}")
+
         user = User.query.get(user_id)
-        
         if not user:
-            print(f"[AUTH] User {user_id} not found in database")
+            print(f"[AUTH] ⚠️  JWT user_id {user_id} not found in DB")
             return None
-        
-        print(f"[AUTH] ✅ User authenticated: {user.name} (ID: {user.id}, Role: {user.role})")
+
+        print(f"[AUTH] ✅ JWT: {user.name} (ID: {user.id}, role: {user.role})")
         return user
+
     except Exception as e:
-        print(f"[AUTH] Error in get_auth_user: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"[AUTH] ❌ Unexpected error: {e}")
         return None
+
 
 def generate_otp():
     return ''.join(random.choices(string.digits, k=4))
@@ -533,6 +669,365 @@ def login_staff_api():
         
     except Exception as e:
         print(f"Login Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/google-sync', methods=['POST', 'OPTIONS'])
+def google_sync():
+    """Sync Google/Firebase user with backend DB and return JWT. (LEGACY - kept for backward compat)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        data = request.get_json()
+        email = (data.get('email') or '').strip().lower()
+        name = (data.get('name') or 'Google User').strip()
+        phone = (data.get('phone') or '').strip()
+        firebase_uid = (data.get('firebase_uid') or '').strip()
+
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+
+        # Find existing user by email
+        user = User.query.filter_by(email=email).first()
+
+        if not user:
+            # Auto-create user from Google Sign-In
+            user = User(
+                name=name,
+                email=email,
+                phone=phone or '0000000000',
+                password=generate_password_hash(firebase_uid or 'google-user'),
+                role='customer',
+                firebase_uid=firebase_uid or None,
+            )
+            db.session.add(user)
+            db.session.commit()
+            print(f"\n✅ NEW GOOGLE USER CREATED: {user.email}\n")
+        else:
+            # Link firebase_uid if not already set
+            if firebase_uid and not user.firebase_uid:
+                user.firebase_uid = firebase_uid
+                db.session.commit()
+            print(f"\n[GOOGLE SYNC] Existing user found: {user.email} (ID: {user.id})\n")
+
+        token = generate_token(user.id)
+
+        resp = make_response(jsonify({
+            'success': True,
+            'token': token,
+            'user': user.to_dict(),
+        }), 200)
+        resp.set_cookie('authToken', token, httponly=False, samesite='Lax', max_age=7*24*3600)
+        return resp
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Google Sync Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== NEW FIREBASE AUTH ENDPOINTS ====================
+
+@app.route('/api/auth/google-login', methods=['POST', 'OPTIONS'])
+def google_login():
+    """Verify Firebase ID Token and return user profile or signal new user."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        data = request.get_json()
+        id_token = (data.get('id_token') or '').strip()
+
+        if not id_token:
+            return jsonify({'error': 'id_token is required'}), 400
+
+        # Verify Firebase ID Token server-side
+        try:
+            decoded_token = verify_firebase_id_token(id_token)
+        except Exception as e:
+            print(f"[GOOGLE-LOGIN] Token verification failed: {e}")
+            return jsonify({'error': 'Invalid or expired Firebase token', 'code': 'TOKEN_INVALID'}), 401
+
+        uid = decoded_token.get('uid', '')
+        email = decoded_token.get('email', '')
+        name = decoded_token.get('name', 'Google User')
+        photo_url = decoded_token.get('picture', '')
+
+        if not uid:
+            return jsonify({'error': 'Could not extract UID from token'}), 401
+
+        # Check if user exists by firebase_uid
+        user = User.query.filter_by(firebase_uid=uid).first()
+
+        if user:
+            # Check if blocked
+            if getattr(user, 'is_blocked', False):
+                return jsonify({'error': 'Account suspended', 'code': 'ACCOUNT_BLOCKED'}), 403
+
+            # Existing user — return profile + transaction summary
+            total_used = db.session.query(func.coalesce(func.sum(Order.total_amount), 0)).filter(
+                Order.user_id == user.id,
+                Order.status.in_(['completed', 'delivered', 'pending'])
+            ).scalar() or 0.0
+
+            print(f"\n[GOOGLE-LOGIN] ✅ Existing user: {user.name} (firebase_uid: {uid})\n")
+
+            return jsonify({
+                'success': True,
+                'user_exists': True,
+                'profile': {
+                    'name': user.name,
+                    'college_id': user.college_id,
+                    'department': user.department,
+                    'year': user.year,
+                    'email': user.email,
+                    'role': user.role,
+                    'wallet_balance': float(user.wallet_balance or 0.0),
+                    'total_used': float(total_used),
+                    'total_saved': 0.0,  # TODO: calculate when discount tracking is added
+                }
+            }), 200
+        else:
+            # Check if user exists by email (link existing account)
+            existing_by_email = User.query.filter_by(email=email.lower()).first() if email else None
+            if existing_by_email:
+                existing_by_email.firebase_uid = uid
+                db.session.commit()
+                print(f"\n[GOOGLE-LOGIN] ✅ Linked firebase_uid to existing email user: {email}\n")
+                
+                total_used = db.session.query(func.coalesce(func.sum(Order.total_amount), 0)).filter(
+                    Order.user_id == existing_by_email.id,
+                    Order.status.in_(['completed', 'delivered', 'pending'])
+                ).scalar() or 0.0
+
+                return jsonify({
+                    'success': True,
+                    'user_exists': True,
+                    'profile': {
+                        'name': existing_by_email.name,
+                        'college_id': existing_by_email.college_id,
+                        'department': existing_by_email.department,
+                        'year': existing_by_email.year,
+                        'email': existing_by_email.email,
+                        'role': existing_by_email.role,
+                        'wallet_balance': float(existing_by_email.wallet_balance or 0.0),
+                        'total_used': float(total_used),
+                        'total_saved': 0.0,
+                    }
+                }), 200
+
+            # Truly new user — signal frontend to show profile form
+            print(f"\n[GOOGLE-LOGIN] 🆕 New user detected: {email} (firebase_uid: {uid})\n")
+            return jsonify({
+                'success': True,
+                'new_user': True,
+                'firebase_uid': uid,
+                'email': email,
+                'name': name,
+                'photo_url': photo_url,
+                'show_form': True,
+            }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Google Login Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/auth/debug-token', methods=['POST', 'OPTIONS'])
+def debug_token():
+    """
+    DEV ONLY — test Firebase token verification without the full login flow.
+    POST { "id_token": "<Firebase ID token>" }
+    Returns the decoded payload or the exact error message.
+    Remove or protect this endpoint before going to production.
+    """
+    if request.method == 'OPTIONS':
+        return '', 204
+    data = request.get_json(silent=True) or {}
+    token = (data.get('id_token') or '').strip()
+    if not token:
+        return jsonify({'error': 'id_token required'}), 400
+    try:
+        decoded = verify_firebase_id_token(token)
+        return jsonify({'success': True, 'decoded': decoded}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/auth/complete-profile', methods=['POST', 'OPTIONS'])
+def complete_profile():
+    """Create a new user after Google Sign-In profile completion."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        data = request.get_json()
+        id_token = (data.get('id_token') or '').strip()
+        firebase_uid_from_body = (data.get('firebase_uid') or '').strip()
+        name = (data.get('name') or '').strip()
+        college_id = (data.get('college_id') or '').strip() or None
+        department = (data.get('department') or '').strip() or None
+        year = (data.get('year') or '').strip() or None
+
+        if not name:
+            return jsonify({'error': 'Name is required'}), 400
+        if not id_token:
+            return jsonify({'error': 'id_token is required for verification'}), 400
+
+        # Re-verify token
+        try:
+            decoded_token = verify_firebase_id_token(id_token)
+        except Exception as e:
+            print(f"[COMPLETE-PROFILE] Token verification failed: {e}")
+            return jsonify({'error': 'Invalid or expired Firebase token', 'code': 'TOKEN_INVALID'}), 401
+
+        uid = decoded_token.get('uid', '')
+        email = decoded_token.get('email', '')
+
+        # Ensure firebase_uid matches token
+        if firebase_uid_from_body and firebase_uid_from_body != uid:
+            return jsonify({'error': 'Firebase UID mismatch', 'code': 'UID_MISMATCH'}), 400
+
+        # Check if user already exists
+        if User.query.filter_by(firebase_uid=uid).first():
+            return jsonify({'error': 'User with this Firebase UID already exists', 'code': 'USER_EXISTS'}), 409
+
+        # Check duplicate college_id
+        if college_id:
+            if User.query.filter_by(college_id=college_id).first():
+                return jsonify({'error': 'College ID already registered to another account', 'code': 'DUPLICATE_COLLEGE_ID'}), 409
+
+        # Validate year
+        if year and year.upper() not in ('FE', 'SE', 'TE', 'BE'):
+            return jsonify({'error': 'Year must be one of: FE, SE, TE, BE'}), 400
+
+        # Create user
+        user = User(
+            firebase_uid=uid,
+            name=name,
+            email=email.lower() if email else f'{uid}@firebase.user',
+            phone='0000000000',  # placeholder — not collected in Google flow
+            password=generate_password_hash(uuid.uuid4().hex),  # random hash, never used
+            role='customer',
+            college_id=college_id,
+            department=department,
+            year=year.upper() if year else None,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        print(f"\n✅ NEW FIREBASE USER CREATED: {user.name} ({user.email}, uid: {uid})\n")
+
+        return jsonify({
+            'success': True,
+            'message': 'Profile created successfully',
+            'profile': {
+                'name': user.name,
+                'college_id': user.college_id,
+                'department': user.department,
+                'year': user.year,
+                'email': user.email,
+                'total_used': 0.0,
+                'total_saved': 0.0,
+            }
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Complete Profile Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/profile/<firebase_uid>', methods=['GET', 'OPTIONS'])
+def get_profile_by_uid(firebase_uid):
+    """Fetch user profile + transaction summary by firebase_uid."""
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    user = get_auth_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        # Allow users to view own profile, or staff/owner to view any
+        target_user = User.query.filter_by(firebase_uid=firebase_uid).first()
+        if not target_user:
+            return jsonify({'error': 'User not found'}), 404
+
+        if user.firebase_uid != firebase_uid and user.role not in ('owner', 'kitchen', 'admin'):
+            return jsonify({'error': 'Access denied'}), 403
+
+        # Transaction summary
+        total_used = db.session.query(func.coalesce(func.sum(Order.total_amount), 0)).filter(
+            Order.user_id == target_user.id,
+            Order.status.in_(['completed', 'delivered', 'pending'])
+        ).scalar() or 0.0
+
+        total_orders = db.session.query(func.count(Order.id)).filter(
+            Order.user_id == target_user.id
+        ).scalar() or 0
+
+        last_order = db.session.query(func.max(Order.created_at)).filter(
+            Order.user_id == target_user.id
+        ).scalar()
+
+        return jsonify({
+            'success': True,
+            'profile': {
+                'name': target_user.name,
+                'college_id': target_user.college_id,
+                'department': target_user.department,
+                'year': target_user.year,
+                'email': target_user.email,
+                'wallet_balance': float(target_user.wallet_balance or 0.0),
+            },
+            'summary': {
+                'total_used': float(total_used),
+                'total_saved': 0.0,
+                'total_orders': total_orders,
+                'last_order_date': last_order.isoformat() if last_order else None,
+            }
+        }), 200
+
+    except Exception as e:
+        print(f"Profile by UID Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/profile/summary/<firebase_uid>', methods=['GET', 'OPTIONS'])
+def get_profile_summary(firebase_uid):
+    """Lightweight transaction summary by firebase_uid."""
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    user = get_auth_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        target_user = User.query.filter_by(firebase_uid=firebase_uid).first()
+        if not target_user:
+            return jsonify({'error': 'User not found'}), 404
+
+        total_used = db.session.query(func.coalesce(func.sum(Order.total_amount), 0)).filter(
+            Order.user_id == target_user.id,
+            Order.status.in_(['completed', 'delivered', 'pending'])
+        ).scalar() or 0.0
+
+        total_orders = db.session.query(func.count(Order.id)).filter(
+            Order.user_id == target_user.id
+        ).scalar() or 0
+
+        return jsonify({
+            'total_used': float(total_used),
+            'total_saved': 0.0,
+            'total_orders': total_orders,
+            'wallet_balance': float(target_user.wallet_balance or 0.0),
+        }), 200
+
+    except Exception as e:
+        print(f"Profile Summary Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/profile', methods=['GET', 'OPTIONS'])
@@ -2985,11 +3480,54 @@ def admin_portal():
     return render_template_string(ADMIN_HTML)
 # ==================== INIT DATABASE ====================
 
+def _run_column_migrations():
+    """
+    Safely add columns that exist in the SQLAlchemy models but may be
+    missing from an already-deployed MySQL database (schema drift fix).
+    Uses ALTER TABLE … ADD COLUMN IF NOT EXISTS so it is idempotent.
+    """
+    migrations = [
+        # table,         column,          DDL type
+        ("user",         "firebase_uid",  "VARCHAR(128) DEFAULT NULL"),
+        ("user",         "is_vip",        "TINYINT(1) NOT NULL DEFAULT 0"),
+        ("user",         "is_blocked",    "TINYINT(1) NOT NULL DEFAULT 0"),
+        ("user",         "wallet_balance","FLOAT NOT NULL DEFAULT 0"),
+        ("user",         "referred_by",   "INTEGER DEFAULT NULL"),
+    ]
+    engine = db.engine
+    with engine.connect() as conn:
+        for table, column, col_def in migrations:
+            try:
+                # MySQL 8.0.3+ supports IF NOT EXISTS; for older versions we
+                # check information_schema first so the statement never errors.
+                check_sql = (
+                    f"SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    f"WHERE TABLE_SCHEMA = DATABASE() "
+                    f"AND TABLE_NAME = '{table}' "
+                    f"AND COLUMN_NAME = '{column}'"
+                )
+                result = conn.execute(db.text(check_sql))
+                exists = result.scalar()
+                if not exists:
+                    conn.execute(db.text(
+                        f"ALTER TABLE `{table}` ADD COLUMN `{column}` {col_def}"
+                    ))
+                    conn.commit()
+                    print(f"✅ Migration: added column `{table}`.`{column}`")
+            except Exception as e:
+                print(f"⚠️  Migration skipped for `{table}`.`{column}`: {e}")
+    print("✅ Column migrations complete")
+
+
 def init_db():
     with app.app_context():
         # Create all tables defined in models.py
         db.create_all()
         print("✅ Database tables created/verified")
+
+        # ── Column migrations: add any columns that exist in the model
+        #    but may be missing from an older database schema ──────────
+        _run_column_migrations()
         
         # Add menu items if empty
         if MenuItem.query.count() == 0:
