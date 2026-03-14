@@ -16,7 +16,7 @@
 #     Port 6543 handles multiple Render workers correctly
 # =============================================================================
 KEY:   DATABASE_URL
-VALUE: postgresql://postgres:ESSENB24AD1097@db.ggghkywbgmmnyyqmcpbr.supabase.co:5432/postgres
+VALUE: postgresql://postgres.ggghkywbgmmnyyqmcpbr:ESSENB24AD1097@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgre
 # =============================================================================
 # FLASK SECRET KEY
 # Already generated — do not change after first deploy
