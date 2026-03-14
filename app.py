@@ -2252,9 +2252,14 @@ def simulate_app_payment(order_id):
 
         # The order_id here usually refers to the database ID (int), 
         # but let's handle both int ID and string order_id just in case
-        order = Order.query.filter(
-            (Order.id == order_id) | (Order.order_id == str(order_id))
-        ).first()
+        # order_id from URL is always a string (e.g. "ORD1773484937246")
+        # Try matching by order_id string first, then by integer db id
+        order = Order.query.filter_by(order_id=str(order_id)).first()
+        if not order:
+            try:
+                order = Order.query.get(int(order_id))
+            except (ValueError, TypeError):
+                pass
 
         if not order:
             return jsonify({'error': 'Order not found'}), 404
