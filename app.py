@@ -1250,6 +1250,14 @@ def create_order():
             # Regular menu item path
             menu_item = MenuItem.query.get(item_id)
             if menu_item:
+                # ── Availability check — reject if admin marked item unavailable
+                if not menu_item.available:
+                    return jsonify({
+                        'error': f'"{menu_item.name}" is no longer available. Please remove it from your cart.',
+                        'code': 'ITEM_UNAVAILABLE',
+                        'item_name': menu_item.name,
+                        'item_id': item_id,
+                    }), 400
                 unit_price = float(menu_item.price)
                 if discount_percent and discount_percent > 0:
                     unit_price = unit_price * (1 - float(discount_percent) / 100.0)
