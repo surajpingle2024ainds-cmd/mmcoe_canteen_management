@@ -3696,4 +3696,4 @@ if __name__ == '__main__':
 
 logger.info("Blueprints registered")
 # Run server
-app.run(debug=not _is_prod, port=5000, host='0.0.0.0')
+app.run(debug=not _is_prod, port=int(os.environ.get('PORT', 5000)), host='0.0.0.0')
