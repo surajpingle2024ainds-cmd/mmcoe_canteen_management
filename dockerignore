@@ -1,0 +1,71 @@
+# =============================================================================
+# .dockerignore — files excluded from Docker build context
+# Keeps image small and prevents secrets from leaking into the image
+# =============================================================================
+
+# Secrets — never bake into Docker image
+.env
+.env.*
+firebase-credentials.json
+*credentials*.json
+*secret*.json
+google-services.json
+GoogleService-Info.plist
+
+# Git
+.git/
+.gitignore
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Auto-generated exports
+users.csv
+orders.csv
+*.csv
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter (not needed in backend image)
+lib/
+android/
+ios/
+web/
+pubspec.yaml
+pubspec.lock
+
+# Docs
+README.md
+*.md
+
+# Misc
+tmp/
+temp/
+.cache/
+logs/
+*.log
