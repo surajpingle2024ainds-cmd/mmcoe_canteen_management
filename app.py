@@ -18,6 +18,21 @@ from firebase_admin import credentials, auth as firebase_auth
 load_dotenv()  # Load .env file
 
 # =============================================================================
+# LOGGING — production-safe logging replaces all print() debug statements
+# In production: only WARNING and above are shown (no user data in logs)
+# In development: DEBUG level shows all messages
+# =============================================================================
+import logging
+
+_is_prod = os.environ.get('FLASK_ENV', 'development') == 'production'
+logging.basicConfig(
+    level=logging.WARNING if _is_prod else logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+)
+logger = logging.getLogger('essen')
+
+# =============================================================================
 # STAFF PORTAL SECURITY
 # =============================================================================
 from flask_limiter import Limiter
@@ -63,24 +78,24 @@ if os.path.exists(_firebase_creds_path):
         _cred = credentials.Certificate(_firebase_creds_path)
         firebase_admin.initialize_app(_cred)
         _firebase_admin_ok = True
-        print(f"[FIREBASE] ✅ Admin SDK initialized from {_firebase_creds_path}")
+        logger.info("[FIREBASE] Admin SDK initialized")
     except Exception as e:
-        print(f"[FIREBASE] ⚠️  {_firebase_creds_path} is invalid: {e}")
-        print(f"[FIREBASE]    → Get the real file: Firebase Console → Project Settings → Service Accounts → Generate new private key")
+        logger.warning(f"[FIREBASE] Credentials file invalid: {e}")
+        
         try:
             firebase_admin.initialize_app()
         except Exception:
             pass
 else:
-    print(f"[FIREBASE] ⚠️  {_firebase_creds_path} not found.")
-    print(f"[FIREBASE]    → Get it: Firebase Console → Project Settings → Service Accounts → Generate new private key")
+    logger.warning("[FIREBASE] firebase-credentials.json not found")
+    
     try:
         firebase_admin.initialize_app()
     except Exception:
         pass
 
 if _skip_verify:
-    print(f"[FIREBASE] ⚠️  FIREBASE_SKIP_VERIFY=true — signature check DISABLED (dev only!)")
+    logger.warning("[FIREBASE] FIREBASE_SKIP_VERIFY=true — dev only, disable in production")
 
 import base64 as _base64
 import time as _time
@@ -137,7 +152,7 @@ def verify_firebase_id_token(id_token: str) -> dict:
 
     if _skip_verify:
         payload = _decode_token_claims_only(id_token)
-        print(f"[FIREBASE] ⚠️  Dev mode: claims accepted without signature (uid={payload.get('uid')})")
+        logger.debug("[FIREBASE] Dev mode: claims accepted without signature verification")
         return payload
 
     raise ValueError(
@@ -232,7 +247,7 @@ def verify_token(token):
         payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         return payload['user_id']
     except Exception as e:
-        print(f"Token verification failed: {e}")
+        logger.debug(f"Token verification failed: {e}")
         return None
 
 def get_auth_user():
@@ -263,14 +278,14 @@ def get_auth_user():
             if uid:
                 user = User.query.filter_by(firebase_uid=uid).first()
                 if user:
-                    print(f"[AUTH] ✅ Firebase: {user.name} (uid: {uid[:8]}...)")
+                    logger.debug("[AUTH] Firebase auth successful")
                     return user
-                print(f"[AUTH] ⚠️  firebase_uid {uid[:8]}... not in DB — needs google-login first")
+                logger.debug("[AUTH] Firebase UID not found in DB")
                 return None
         except ValueError:
             pass  # HS256 token or claim mismatch — fall through to JWT check
         except Exception as e:
-            print(f"[AUTH] Firebase check error: {e}")
+            logger.debug(f"[AUTH] Firebase check error: {e}")
 
         # ── Try 2: Internal HS256 JWT (browser staff/owner portal) ───────────
         user_id = verify_token(token)
@@ -279,14 +294,14 @@ def get_auth_user():
 
         user = User.query.get(user_id)
         if not user:
-            print(f"[AUTH] ⚠️  JWT user_id {user_id} not found in DB")
+            logger.warning(f"[AUTH] JWT user_id not found in DB")
             return None
 
-        print(f"[AUTH] ✅ JWT: {user.name} (ID: {user.id}, role: {user.role})")
+        logger.debug("[AUTH] JWT auth successful")
         return user
 
     except Exception as e:
-        print(f"[AUTH] ❌ Unexpected error: {e}")
+        logger.error(f"[AUTH] Unexpected error: {e}")
         return None
 
 
@@ -388,12 +403,7 @@ def api_generate_otp():
         for p in expired_phones:
             del otp_storage[p]
         
-        print(f"\n[OTP] GENERATED")
-        print(f"   Phone: {phone}")
-        print(f"   Email: {email}")
-        print(f"   Name: {name}")
-        print(f"   OTP: {otp}")
-        print(f"   Time: {current_time.strftime('%H:%M:%S')}\n")
+        logger.info("[OTP] Generated successfully")
         
         return jsonify({
             'success': True,
@@ -403,7 +413,7 @@ def api_generate_otp():
         }), 200
         
     except Exception as e:
-        print(f"OTP Generation Error: {e}")
+        logger.error(f"OTP generation error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ==================== NEW MODELS (ADD-ONLY) ====================
@@ -517,10 +527,7 @@ def signup():
         
         token = generate_token(user.id)
         
-        print(f"\n✅ NEW USER REGISTERED")
-        print(f"   Name: {user.name}")
-        print(f"   Email: {user.email}")
-        print(f"   Role: {user.role}\n")
+        logger.info("[SIGNUP] New user registered")
         
         resp = make_response(jsonify({
             'success': True,
@@ -545,7 +552,7 @@ def signup():
         
     except Exception as e:
         db.session.rollback()
-        print(f"Signup Error: {e}")
+        logger.error(f"Signup error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/login/customer', methods=['POST', 'OPTIONS'])
@@ -583,7 +590,7 @@ def login_customer_api():
         
         token = generate_token(user.id)
         
-        print(f"\n[LOGIN] CUSTOMER LOGIN: {user.phone}")
+        logger.info("[LOGIN] Customer login successful")
         
         resp = make_response(jsonify({
             'success': True,
@@ -595,7 +602,7 @@ def login_customer_api():
         return resp
         
     except Exception as e:
-        print(f"Login Error: {e}")
+        logger.error(f"Login error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/login/otp', methods=['POST', 'OPTIONS'])
@@ -631,7 +638,7 @@ def login_otp_api():
              return jsonify({'error': 'Access restricted to customers'}), 403
              
         token = generate_token(user.id)
-        print(f"\n[LOGIN] OTP LOGIN: {user.phone}")
+        logger.info("[LOGIN] OTP login successful")
         
         resp = make_response(jsonify({
             'success': True,
@@ -654,7 +661,7 @@ def login_otp_api():
         return resp
         
     except Exception as e:
-        print(f"OTP Login Error: {e}")
+        logger.error(f"OTP login error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/login/staff', methods=['POST', 'OPTIONS'])
@@ -676,7 +683,7 @@ def login_staff_api():
 
         # ── Layer 1: Staff secret code check ──────────────────────────────
         if _STAFF_SECRET and secret_code != _STAFF_SECRET:
-            print(f"[STAFF LOGIN] ❌ Wrong secret code from IP {get_remote_address()}")
+            logger.warning(f"[STAFF LOGIN] Wrong secret code from IP {get_remote_address()}")
             return jsonify({'error': 'Invalid credentials'}), 401
 
         # ── Layer 2: Find user by College ID ──────────────────────────────
@@ -694,13 +701,13 @@ def login_staff_api():
 
         # ── Layer 4: Password check ───────────────────────────────────────
         if not check_password_hash(user.password, password):
-            print(f"[STAFF LOGIN] ❌ Wrong password for {identifier} from IP {get_remote_address()}")
+            logger.warning(f"[STAFF LOGIN] Wrong password attempt from IP {get_remote_address()}")
             return jsonify({'error': 'Invalid credentials'}), 401
 
         # ── All checks passed — issue 8-hour staff token ──────────────────
         token = generate_token(user.id, staff=True)
 
-        print(f"\n[STAFF LOGIN] ✅ {user.name} ({user.role}) from IP {get_remote_address()}\n")
+        logger.info(f"[STAFF LOGIN] Successful login (role: {user.role}) from IP {get_remote_address()}")
 
         resp = make_response(jsonify({
             'success': True,
@@ -726,7 +733,7 @@ def login_staff_api():
         return resp
 
     except Exception as e:
-        print(f"[STAFF LOGIN] Error: {e}")
+        logger.error(f"[STAFF LOGIN] Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/google-sync', methods=['POST', 'OPTIONS'])
@@ -759,13 +766,13 @@ def google_sync():
             )
             db.session.add(user)
             db.session.commit()
-            print(f"\n✅ NEW GOOGLE USER CREATED: {user.email}\n")
+            logger.info("[GOOGLE SYNC] New user created")
         else:
             # Link firebase_uid if not already set
             if firebase_uid and not user.firebase_uid:
                 user.firebase_uid = firebase_uid
                 db.session.commit()
-            print(f"\n[GOOGLE SYNC] Existing user found: {user.email} (ID: {user.id})\n")
+            logger.debug("[GOOGLE SYNC] Existing user found")
 
         token = generate_token(user.id)
 
@@ -779,7 +786,7 @@ def google_sync():
 
     except Exception as e:
         db.session.rollback()
-        print(f"Google Sync Error: {e}")
+        logger.error(f"Google sync error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ==================== NEW FIREBASE AUTH ENDPOINTS ====================
@@ -800,7 +807,7 @@ def google_login():
         try:
             decoded_token = verify_firebase_id_token(id_token)
         except Exception as e:
-            print(f"[GOOGLE-LOGIN] Token verification failed: {e}")
+            logger.warning(f"[GOOGLE-LOGIN] Token verification failed: {e}")
             return jsonify({'error': 'Invalid or expired Firebase token', 'code': 'TOKEN_INVALID'}), 401
 
         uid = decoded_token.get('uid', '')
@@ -825,7 +832,7 @@ def google_login():
                 Order.status.in_(['completed', 'delivered', 'pending'])
             ).scalar() or 0.0
 
-            print(f"\n[GOOGLE-LOGIN] ✅ Existing user: {user.name} (firebase_uid: {uid})\n")
+            logger.info("[GOOGLE-LOGIN] Existing user authenticated")
 
             return jsonify({
                 'success': True,
@@ -848,7 +855,7 @@ def google_login():
             if existing_by_email:
                 existing_by_email.firebase_uid = uid
                 db.session.commit()
-                print(f"\n[GOOGLE-LOGIN] ✅ Linked firebase_uid to existing email user: {email}\n")
+                logger.info("[GOOGLE-LOGIN] Linked Firebase UID to existing account")
                 
                 total_used = db.session.query(func.coalesce(func.sum(Order.total_amount), 0)).filter(
                     Order.user_id == existing_by_email.id,
@@ -872,7 +879,7 @@ def google_login():
                 }), 200
 
             # Truly new user — signal frontend to show profile form
-            print(f"\n[GOOGLE-LOGIN] 🆕 New user detected: {email} (firebase_uid: {uid})\n")
+            logger.info("[GOOGLE-LOGIN] New user detected — profile completion required")
             return jsonify({
                 'success': True,
                 'new_user': True,
@@ -885,9 +892,8 @@ def google_login():
 
     except Exception as e:
         db.session.rollback()
-        print(f"Google Login Error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Google login error: {e}")
+
         return jsonify({'error': str(e)}), 500
 
 
@@ -935,7 +941,7 @@ def complete_profile():
         try:
             decoded_token = verify_firebase_id_token(id_token)
         except Exception as e:
-            print(f"[COMPLETE-PROFILE] Token verification failed: {e}")
+            logger.warning(f"[COMPLETE-PROFILE] Token verification failed: {e}")
             return jsonify({'error': 'Invalid or expired Firebase token', 'code': 'TOKEN_INVALID'}), 401
 
         uid = decoded_token.get('uid', '')
@@ -973,7 +979,7 @@ def complete_profile():
         db.session.add(user)
         db.session.commit()
 
-        print(f"\n✅ NEW FIREBASE USER CREATED: {user.name} ({user.email}, uid: {uid})\n")
+        logger.info("[COMPLETE-PROFILE] New Firebase user created")
 
         return jsonify({
             'success': True,
@@ -991,9 +997,8 @@ def complete_profile():
 
     except Exception as e:
         db.session.rollback()
-        print(f"Complete Profile Error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Complete profile error: {e}")
+
         return jsonify({'error': str(e)}), 500
 
 
@@ -1049,7 +1054,7 @@ def get_profile_by_uid(firebase_uid):
         }), 200
 
     except Exception as e:
-        print(f"Profile by UID Error: {e}")
+        logger.error(f"Profile by UID error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1085,7 +1090,7 @@ def get_profile_summary(firebase_uid):
         }), 200
 
     except Exception as e:
-        print(f"Profile Summary Error: {e}")
+        logger.error(f"Profile summary error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/profile', methods=['GET', 'OPTIONS'])
@@ -1119,7 +1124,7 @@ def get_profile():
             }
         }), 200
     except Exception as e:
-        print(f"Profile Error: {e}")
+        logger.error(f"Profile error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/menu/all', methods=['GET', 'OPTIONS'])
@@ -1141,7 +1146,7 @@ def get_all_menu():
             'image_url': item.image_url or ''
         } for item in items]), 200
     except Exception as e:
-        print(f"Menu Error: {e}")
+        logger.error(f"Menu error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/menu/today', methods=['GET', 'OPTIONS'])
@@ -1185,7 +1190,7 @@ def get_today_menu():
         
         return jsonify(result), 200
     except Exception as e:
-        print(f"Today Menu Error: {e}")
+        logger.error(f"Today menu error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/orders/create', methods=['POST', 'OPTIONS'])
@@ -1272,8 +1277,7 @@ def create_order():
         if transaction_id and transaction_id not in ['DEMO-TXN', 'WALLET']:
             existing_order = Order.query.filter_by(transaction_id=transaction_id).first()
             if existing_order:
-                print(f"\n⚠️ DUPLICATE TRANSACTION DETECTED: {transaction_id}")
-                print(f"   Returning existing order: {existing_order.order_id}\n")
+                logger.warning(f"[ORDER] Duplicate transaction detected: {transaction_id}")
                 
                 # Fetch coupon for this order to return full details
                 existing_coupon = Coupon.query.filter_by(order_id=existing_order.id).first()
@@ -1300,7 +1304,7 @@ def create_order():
             # Deduct from wallet
             user.wallet_balance = wallet_balance - calculated_total
             transaction_id = 'WALLET'
-            print(f"Payment via wallet: ₹{calculated_total} deducted. Remaining balance: ₹{user.wallet_balance}")
+            logger.info("[ORDER] Wallet payment processed")
         
         order = Order(
             order_id=order_id,
@@ -1410,17 +1414,14 @@ def create_order():
             )
             db.session.add(daily_log)
         except Exception as e:
-            print(f"Error creating daily log: {e}")
+            logger.error(f"Daily log error: {e}")
         
         db.session.commit()
 
         # Export CSV snapshots
         export_csv()
         
-        print(f"\n✅ ORDER CREATED")
-        print(f"   Order ID: {order_id}")
-        print(f"   Customer: {user.name}")
-        print(f"   Amount: ₹{data.get('total')}\n")
+        logger.info(f"[ORDER] Created: {order_id}")
         
         return jsonify({
             'success': True,
@@ -1431,7 +1432,7 @@ def create_order():
         
     except Exception as e:
         db.session.rollback()
-        print(f"Order Creation Error: {e}")
+        logger.error(f"Order creation error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/orders/analytics', methods=['GET', 'OPTIONS'])
@@ -1464,7 +1465,7 @@ def get_order_analytics():
         } for item in top_items]), 200
         
     except Exception as e:
-        print(f"Analytics Error: {e}")
+        logger.error(f"Analytics error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1503,11 +1504,11 @@ def demo_create_payment():
         pay_url_relative = f"/demo/pay/{token}"
         status_url = f"/demo/pay/{token}/status"
         
-        print(f"[PAYMENT] Created: {token} - Amount: {amount} - Status: pending")
-        print(f"[PAYMENT] Pay URL (absolute): {pay_url_absolute}")
-        print(f"[PAYMENT] Pay URL (relative): {pay_url_relative}")
-        print(f"[PAYMENT] Status URL: {status_url}")
-        print(f"[PAYMENT] Stored in demo_payments dict (total: {len(demo_payments)})")
+        logger.debug(f"[PAYMENT] Session created")
+        
+        
+        
+        
         
         return jsonify({
             'success': True,
@@ -1518,16 +1519,16 @@ def demo_create_payment():
             'status_url': status_url
         }), 201
     except Exception as e:
-        print(f"[PAYMENT] Error creating payment: {e}")
+        logger.error(f"Payment creation error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/demo/pay/<token>', methods=['GET'])
 def demo_pay_page(token):
     """Payment page where user clicks 'Pay Now'"""
     # Debug: Log token lookup attempt
-    print(f"[PAYMENT PAGE] Looking up token: {token}")
-    print(f"[PAYMENT PAGE] Available tokens: {list(demo_payments.keys())[:5]}")  # Show first 5 tokens
-    print(f"[PAYMENT PAGE] Total payments in storage: {len(demo_payments)}")
+    
+    
+    
     
     # Try to find the token (handle URL encoding)
     info = demo_payments.get(token)
@@ -1538,7 +1539,7 @@ def demo_pay_page(token):
             from urllib.parse import unquote
             decoded_token = unquote(token)
             if decoded_token != token:
-                print(f"[PAYMENT PAGE] Trying decoded token: {decoded_token}")
+                
                 info = demo_payments.get(decoded_token)
                 if info:
                     token = decoded_token  # Use decoded token for rest of function
@@ -1546,7 +1547,7 @@ def demo_pay_page(token):
             pass
     
     if not info:
-        print(f"[PAYMENT PAGE] ❌ Token not found: {token}")
+        logger.warning("[PAYMENT] Token not found")
         # Show available tokens for debugging (first 100 chars)
         debug_info = f"<p>Token searched: <code>{token}</code></p><p>Available tokens: {len(demo_payments)}</p>"
         return (f"""
@@ -1790,7 +1791,7 @@ def demo_pay_confirm(token):
     info['paid_at'] = datetime.utcnow().isoformat()
     info['updated_at'] = datetime.utcnow().isoformat()
     
-    print(f"[PAYMENT] Confirmed: {token} - Status: PAID")
+    logger.info("[PAYMENT] Payment confirmed")
     
     return jsonify({
         'success': True,
@@ -1804,16 +1805,16 @@ def demo_pay_status(token):
     if request.method == 'OPTIONS':
         return '', 204
     
-    print(f"[PAYMENT STATUS] Checking token: {token}")
+    
     
     info = demo_payments.get(token)
     if not info:
-        print(f"[PAYMENT STATUS] Token not found: {token}")
+        
         return jsonify({'error': 'Invalid token'}), 404
     
     status = info.get('status', 'pending')
     
-    print(f"[PAYMENT STATUS] Token: {token} - Status: {status}")
+    
     
     # CRITICAL: Return exact format expected by frontend
     response = jsonify({
@@ -2051,7 +2052,7 @@ def serialize_order(order: Order):
                     'price': it.price,
                 })
     except Exception as e:
-        print(f"Error serializing order items for order {order.order_id}: {e}")
+        logger.error(f"Order serialization error: {e}")
         items_list = []
     
     return {
@@ -2151,38 +2152,38 @@ def owner_accept_order(order_id):
     try:
         # Debug: Log incoming request headers
         auth_header = request.headers.get('Authorization', '')
-        print(f"[ACCEPT ORDER] Authorization header: {auth_header[:50] if auth_header else 'NONE'}...")
-        print(f"[ACCEPT ORDER] Request method: {request.method}")
-        print(f"[ACCEPT ORDER] Request headers: {dict(request.headers)}")
+        
+        
+        
         
         user = get_auth_user()
         if not user:
-            print(f"[ACCEPT ORDER] ❌ No authenticated user - returning 401")
+            logger.warning("[ACCEPT ORDER] Unauthorized attempt")
             return jsonify({'error': 'Unauthorized - Please login. Token missing or invalid.'}), 401
         
-        print(f"[ACCEPT ORDER] User authenticated: {user.name} (ID: {user.id}, Role: {user.role}, Email: {user.email})")
+        
         
         if user.role != 'owner':
-            print(f"[ACCEPT ORDER] ❌ User {user.id} ({user.name}) has role '{user.role}' but needs 'owner'")
-            print(f"[ACCEPT ORDER] User details: email={user.email}, role={user.role}")
+            logger.warning("[ACCEPT ORDER] Non-owner attempted to accept order")
+            
             return jsonify({'error': f'Only owner can accept orders. Your role is: {user.role}'}), 403
         
         data = request.get_json() or {}
         is_vip = bool(data.get('is_vip', False))
         is_important = bool(data.get('is_important', False))
         
-        print(f"[ACCEPT ORDER] Attempting to accept order ID: {order_id}")
+        
         order = Order.query.get(order_id)
         
         if not order:
-            print(f"[ACCEPT ORDER] Order {order_id} not found in database")
+            logger.warning(f"[ACCEPT ORDER] Order {order_id} not found")
             return jsonify({'error': f'Order {order_id} not found'}), 404
         
-        print(f"[ACCEPT ORDER] Order {order_id} found - Current status: {order.status}")
+        
         
         # Allow accepting if status is 'pending' (relax the check slightly)
         if order.status != 'pending':
-            print(f"[ACCEPT ORDER] Order {order_id} is not pending (current: {order.status})")
+            logger.warning(f"[ACCEPT ORDER] Order {order_id} not in pending state")
             # Still allow if already accepted (idempotent)
             if order.status == 'accepted':
                 return jsonify({'success': True, 'order_id': order_id, 'message': 'Order already accepted'}), 200
@@ -2190,7 +2191,7 @@ def owner_accept_order(order_id):
         
         # Update order status
         order.status = 'accepted'
-        print(f"[ACCEPT ORDER] Updated order {order_id} status to 'accepted'")
+        
         
         # Set VIP if requested
         if is_vip and order.user_id:
@@ -2198,7 +2199,7 @@ def owner_accept_order(order_id):
             if user_obj:
                 if not hasattr(user_obj, 'is_vip') or not user_obj.is_vip:
                     user_obj.is_vip = True
-                    print(f"[ACCEPT ORDER] Marked user {user_obj.id} as VIP")
+                    
         
         # Add important note if requested
         if is_important:
@@ -2207,11 +2208,11 @@ def owner_accept_order(order_id):
                     order.kitchen_notes = order.kitchen_notes + ' [IMPORTANT]'
             else:
                 order.kitchen_notes = '[IMPORTANT]'
-            print(f"[ACCEPT ORDER] Added IMPORTANT flag to order {order_id}")
+            
         
         # Commit the order status change first
         db.session.commit()
-        print(f"[ACCEPT ORDER] ✅ Order {order_id} accepted successfully")
+        logger.info(f"[ACCEPT ORDER] Order {order_id} accepted")
         
         # Notify customer (separate try-catch to not affect main commit)
         try:
@@ -2219,9 +2220,9 @@ def owner_accept_order(order_id):
             notification = Notification(user_id=order.user_id, message=f"Your order {order.order_id} was accepted.")
             db.session.add(notification)
             db.session.commit()
-            print(f"[ACCEPT ORDER] Notification sent to user {order.user_id}")
+            
         except Exception as e:
-            print(f"[ACCEPT ORDER] Failed to create notification: {e}")
+            logger.warning(f"[ACCEPT ORDER] Notification failed: {e}")
             # Don't rollback here - order is already accepted
         
         export_csv()
@@ -2233,9 +2234,8 @@ def owner_accept_order(order_id):
         }), 200
     except Exception as e:
         db.session.rollback()
-        print(f"[ACCEPT ORDER] ❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"[ACCEPT ORDER] Error: {e}")
+
         return jsonify({'error': str(e)}), 500
 
 # ==================== APP PAYMENT SIMULATION ====================
@@ -2330,7 +2330,7 @@ def owner_reject_order(order_id):
                 if not hasattr(customer, 'wallet_balance'):
                     customer.wallet_balance = 0.0
                 customer.wallet_balance = (customer.wallet_balance or 0.0) + float(order.total_amount)
-                print(f"Added ₹{order.total_amount} to wallet for user {customer.id} (Order {order.order_id} rejected)")
+                logger.info("[ORDER] Refund added to wallet")
         
         order.status = 'rejected'
         db.session.commit()
@@ -2346,7 +2346,7 @@ def owner_reject_order(order_id):
                 db.session.add(notification)
                 db.session.commit()
         except Exception as e:
-            print(f"Failed to send notification: {e}")
+            logger.warning(f"Notification failed: {e}")
         
         export_csv()
         return jsonify({'success': True}), 200
@@ -2448,9 +2448,8 @@ def api_user_profile():
             'user': profile_data
         }), 200
     except Exception as e:
-        print(f"Profile Error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Profile error: {e}")
+
         return jsonify({'error': str(e)}), 500
 
 # ==================== WALLET API ENDPOINTS ====================
@@ -2521,9 +2520,9 @@ def api_feedback():
             return jsonify({'success': True, 'message': 'Feedback submitted successfully'}), 201
         except Exception as e:
             db.session.rollback()
-            print(f"Feedback submission error: {e}")
+            logger.error(f"Feedback submission error: {e}")
             import traceback
-            traceback.print_exc()
+    
             return jsonify({'error': f'Failed to submit feedback: {str(e)}'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2693,9 +2692,8 @@ def upload_image():
         }), 200
         
     except Exception as e:
-        print(f"Image Upload Error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Image upload error: {e}")
+
         return jsonify({'error': str(e)}), 500
 
 # ==================== OWNER: ADD NEW DISH ====================
@@ -2750,7 +2748,7 @@ def owner_add_dish():
         
     except Exception as e:
         db.session.rollback()
-        print(f"Add Dish Error: {e}")
+        logger.error(f"Add dish error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ==================== OFFER MANAGEMENT ====================
@@ -3232,7 +3230,7 @@ def owner_create_cash_order():
             )
             db.session.add(daily_log)
         except Exception as e:
-            print(f"Error creating daily log for cash order: {e}")
+            logger.error(f"Cash order daily log error: {e}")
         
         db.session.commit()
         export_csv()
@@ -3335,11 +3333,11 @@ def kitchen_order_history():
     try:
         user = get_auth_user()
         if not user:
-            print(f"[KITCHEN HISTORY] No user found - auth failed")
+            logger.warning("[KITCHEN HISTORY] Unauthorized")
             return jsonify({'error': 'Unauthorized - Please login'}), 401
         
         if user.role not in ['kitchen', 'owner']:
-            print(f"[KITCHEN HISTORY] Role mismatch - expected 'kitchen' or 'owner', got '{user.role}'")
+            logger.warning("[KITCHEN HISTORY] Role mismatch")
             return jsonify({'error': f'Unauthorized - Kitchen/Owner access required. Your role is: {user.role}'}), 403
         
         status_filter = request.args.get('status', '').strip()
@@ -3375,13 +3373,13 @@ def owner_order_history():
     try:
         user = get_auth_user()
         if not user:
-            print(f"[OWNER HISTORY] No user found - auth failed")
+            logger.warning("[OWNER HISTORY] Unauthorized")
             return jsonify({'error': 'Unauthorized - Please login'}), 401
         
-        print(f"[OWNER HISTORY] User: {user.name}, Role: {user.role}")
+        
         
         if user.role != 'owner':
-            print(f"[OWNER HISTORY] Role mismatch - expected 'owner', got '{user.role}'")
+            logger.warning("[OWNER HISTORY] Role mismatch")
             return jsonify({'error': f'Unauthorized - Owner access required. Your role is: {user.role}'}), 403
         
         status_filter = request.args.get('status', '').strip()
@@ -3573,17 +3571,17 @@ def _run_column_migrations():
                         f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_def}'
                     ))
                     conn.commit()
-                    print(f'✅ Migration: added column "{table}"."{column}"')
+                    logger.info(f'Migration: added column "{column}"')
             except Exception as e:
-                print(f'⚠️  Migration skipped for "{table}"."{column}": {e}')
-    print("✅ Column migrations complete")
+                logger.warning(f'Migration skipped for "{column}": {e}')
+    logger.info("Column migrations complete")
 
 
 def init_db():
     with app.app_context():
         # Create all tables defined in models.py
         db.create_all()
-        print("✅ Database tables created/verified")
+        logger.info("Database tables created/verified")
 
         # ── Column migrations: add any columns that exist in the model
         #    but may be missing from an older database schema ──────────
@@ -3608,7 +3606,7 @@ def init_db():
             for item in items:
                 db.session.add(item)
             db.session.commit()
-            print("✅ Menu items initialized")
+            logger.info("Menu items initialized")
         
         # Add test users if not present
         if not User.query.filter_by(phone="9999999999").first():
@@ -3624,7 +3622,7 @@ def init_db():
                 address="Pune, Maharashtra"
             )
             db.session.add(test_customer)
-            print("✅ Test Customer created")
+            logger.info("Test customer account ready")
 
         # ── Owner account — credentials from .env ────────────────────────
         _owner_id  = os.environ.get('OWNER_COLLEGE_ID', 'MMCOE_OWNER_2025')
@@ -3641,7 +3639,7 @@ def init_db():
                 year="Staff"
             )
             db.session.add(owner)
-            print(f"✅ Owner account created (college_id: {_owner_id})")
+            logger.info("Owner account ready")
 
         # ── Kitchen account — credentials from .env ───────────────────────
         _kitchen_id  = os.environ.get('KITCHEN_COLLEGE_ID', 'MMCOE_KITCHEN_2025')
@@ -3658,7 +3656,7 @@ def init_db():
                 year="Staff"
             )
             db.session.add(kitchen)
-            print(f"✅ Kitchen account created (college_id: {_kitchen_id})")
+            logger.info("Kitchen account ready")
             
         db.session.commit()
 
@@ -3694,22 +3692,8 @@ if __name__ == '__main__':
     app.register_blueprint(chatbot_bp)
     
 
-    print("\n" + "="*70)
-    print("MMCOE SMART CANTEEN BACKEND SERVER")
-    print("="*70)
-    print("Server URL: http://localhost:5000")
-    print("API Base: http://localhost:5000/api")
-    print("CORS: Enabled for all origins")
-    print("\nACCOUNTS:")
-    print("   Customer: 9999999999 / pass123 (test only)")
-    print("   Owner:    set via OWNER_COLLEGE_ID + OWNER_PASSWORD in .env")
-    print("   Kitchen:  kitchen    / pass123")
-    print("\nNOTES:")
-    print("   - OTP is displayed in console (no email service required)")
-    print("   - All endpoints support CORS")
-    print("   - Database: Supabase PostgreSQL")
-    print("="*70 + "\n")
+    logger.info("MMCOE Smart Canteen backend started")
 
-print("Blueprints registered")
+logger.info("Blueprints registered")
 # Run server
-app.run(debug=True, port=5000, host='0.0.0.0')
+app.run(debug=not _is_prod, port=5000, host='0.0.0.0')
