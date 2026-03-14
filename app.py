@@ -18,6 +18,23 @@ from firebase_admin import credentials, auth as firebase_auth
 load_dotenv()  # Load .env file
 
 # =============================================================================
+# STAFF PORTAL SECURITY
+# =============================================================================
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+# Rate limiter — blocks brute force on staff login
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],          # no global limit — only applied per route
+    storage_uri='memory://',    # in-memory storage (no Redis needed)
+)
+
+# Staff secret code — required on every owner/kitchen login
+# Set STAFF_SECRET_CODE in your .env file
+_STAFF_SECRET = os.environ.get('STAFF_SECRET_CODE', '')
+
+# =============================================================================
 # FIREBASE AUTH — the ONLY auth mechanism for the Flutter mobile app
 #
 # Flutter sends:  Authorization: Bearer <firebase_id_token>
@@ -159,14 +176,34 @@ CORS(app, resources={
 })
 
 # Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+# ── DATABASE URL (Supabase PostgreSQL) ────────────────────────────────────────
+# Local dev:   postgresql://postgres:password@localhost:5432/canteen_db
+#
+# Supabase (production) — use the POOLER URL (port 6543) NOT the direct URL:
+#   Project Settings → Database → Connection Pooling → Connection String
+#   Looks like: postgresql://postgres:pass@db.xxxx.supabase.co:6543/postgres
+#
+# Why port 6543 (pooler) instead of 5432 (direct)?
+#   - Supports many concurrent connections from Render's multiple workers
+#   - Lower latency, better performance on free tier
+#   - Supabase recommends pooler for all server-side apps
+#
+# Set DATABASE_URL in Render dashboard → Environment Variables
+# ─────────────────────────────────────────────────────────────────────────────
+_db_url = os.environ.get(
     'DATABASE_URL',
-    'mysql+pymysql://root:password@localhost:3306/canteen_db'
+    'postgresql://postgres:password@localhost:5432/canteen_db'
 )
+# Supabase (and some older platforms) gives URLs starting with "postgres://"
+# SQLAlchemy 2.x requires "postgresql://"
+if _db_url.startswith('postgres://'):
+    _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mmcoe-secret-key-2025-super-secure')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
+limiter.init_app(app)
 
 # OTP storage (in-memory for demo - no email service required)
 otp_storage = {}
@@ -176,12 +213,17 @@ demo_payments = {}
 
 # ==================== HELPER FUNCTIONS ====================
 
-def generate_token(user_id, remember_me=False):
-    # If remember_me is True, token expires in 30 days, otherwise 7 days
-    days = 30 if remember_me else 7
+def generate_token(user_id, remember_me=False, staff=False):
+    # Staff tokens: 8 hours (forces daily re-login)
+    # Customer tokens: 7 days (or 30 days with remember_me)
+    if staff:
+        expiry = datetime.utcnow() + timedelta(hours=8)
+    else:
+        days = 30 if remember_me else 7
+        expiry = datetime.utcnow() + timedelta(days=days)
     payload = {
         'user_id': user_id,
-        'exp': datetime.utcnow() + timedelta(days=days)
+        'exp': expiry
     }
     return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
 
@@ -279,13 +321,21 @@ def role_required(*allowed_roles):
             if not token:
                 auth_header = request.headers.get('Authorization', '')
                 token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else None
+            # Redirect to staff login if no token and route needs owner/kitchen
+            staff_roles = {'owner', 'kitchen'}
             if not token:
+                if staff_roles.intersection(set(allowed_roles)):
+                    return redirect('/login/staff')
                 return redirect('/login/customer')
             user_id = verify_token(token)
             if not user_id:
+                if staff_roles.intersection(set(allowed_roles)):
+                    return redirect('/login/staff')
                 return redirect('/login/customer')
             user = User.query.get(user_id)
             if not user or user.role not in allowed_roles:
+                if staff_roles.intersection(set(allowed_roles)):
+                    return redirect('/login/staff')
                 return redirect('/login/customer')
             return f(*args, **kwargs)
         return decorated
@@ -608,42 +658,50 @@ def login_otp_api():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/login/staff', methods=['POST', 'OPTIONS'])
+@limiter.limit("5 per 15 minutes", error_message="Too many login attempts. Try again in 15 minutes.")
 def login_staff_api():
     if request.method == 'OPTIONS':
         return '', 204
-    
+
     try:
-        data = request.get_json()
-        
-        # Staff Login: Email/ID + Password
-        identifier = data.get('identifier') or data.get('email')
-        password = data.get('password')
+        data = request.get_json() or {}
+
+        # ── Collect credentials ────────────────────────────────────────────
+        identifier   = (data.get('identifier') or data.get('college_id') or '').strip()
+        password     = (data.get('password') or '').strip()
+        secret_code  = (data.get('secret_code') or '').strip()
 
         if not identifier or not password:
-            return jsonify({'error': 'Email/ID and password are required'}), 400
-        
-        identifier = identifier.strip()
-        
-        # Find user by Email or College ID
-        user = User.query.filter(
-            (User.email == identifier.lower()) |
-            (User.college_id == identifier)
-        ).first()
-        
-        if not user:
-             return jsonify({'error': 'Invalid credentials'}), 401
+            return jsonify({'error': 'College ID and password are required'}), 400
 
-        # Enforce Staff Role (Not customer)
-        if user.role == 'customer':
-             return jsonify({'error': 'Access restricted to staff'}), 403
-
-        if not check_password_hash(user.password, password):
+        # ── Layer 1: Staff secret code check ──────────────────────────────
+        if _STAFF_SECRET and secret_code != _STAFF_SECRET:
+            print(f"[STAFF LOGIN] ❌ Wrong secret code from IP {get_remote_address()}")
             return jsonify({'error': 'Invalid credentials'}), 401
-        
-        token = generate_token(user.id)
-        
-        print(f"\n[LOGIN] STAFF LOGIN: {user.email} ({user.role})")
-        
+
+        # ── Layer 2: Find user by College ID ──────────────────────────────
+        user = User.query.filter(
+            (User.college_id == identifier) |
+            (User.email == identifier.lower())
+        ).first()
+
+        if not user:
+            return jsonify({'error': 'Invalid credentials'}), 401
+
+        # ── Layer 3: Enforce owner/kitchen only ───────────────────────────
+        if user.role not in ('owner', 'kitchen'):
+            return jsonify({'error': 'Access restricted to staff'}), 403
+
+        # ── Layer 4: Password check ───────────────────────────────────────
+        if not check_password_hash(user.password, password):
+            print(f"[STAFF LOGIN] ❌ Wrong password for {identifier} from IP {get_remote_address()}")
+            return jsonify({'error': 'Invalid credentials'}), 401
+
+        # ── All checks passed — issue 8-hour staff token ──────────────────
+        token = generate_token(user.id, staff=True)
+
+        print(f"\n[STAFF LOGIN] ✅ {user.name} ({user.role}) from IP {get_remote_address()}\n")
+
         resp = make_response(jsonify({
             'success': True,
             'message': 'Login successful',
@@ -651,24 +709,24 @@ def login_staff_api():
             'user': {
                 'id': user.id,
                 'name': user.name,
-                'email': user.email,
                 'role': user.role,
-                'phone': user.phone,
                 'college_id': user.college_id,
-                'department': user.department,
-                'year': user.year,
-                'address': user.address
             }
         }), 200)
-        resp.set_cookie('authToken', token, httponly=False, samesite='Lax', max_age=7*24*3600)
+        # httponly=True — JS cannot read this cookie (XSS protection)
+        # secure=True only on production HTTPS — auto-detect via env
+        _is_production = os.environ.get('FLASK_ENV', 'development') == 'production'
+        resp.set_cookie(
+            'authToken', token,
+            httponly=True,
+            samesite='Lax',
+            secure=_is_production,  # True on Render (HTTPS), False on local (HTTP)
+            max_age=8 * 3600        # 8 hours — matches token expiry
+        )
         return resp
-        
+
     except Exception as e:
-         print(f"Login Error: {e}")
-         return jsonify({'error': str(e)}), 500
-        
-    except Exception as e:
-        print(f"Login Error: {e}")
+        print(f"[STAFF LOGIN] Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/google-sync', methods=['POST', 'OPTIONS'])
@@ -3483,39 +3541,41 @@ def admin_portal():
 def _run_column_migrations():
     """
     Safely add columns that exist in the SQLAlchemy models but may be
-    missing from an already-deployed MySQL database (schema drift fix).
-    Uses ALTER TABLE … ADD COLUMN IF NOT EXISTS so it is idempotent.
+    missing from an already-deployed database (schema drift fix).
+    Supabase PostgreSQL compatible — uses information_schema.columns with
+    table_schema='public', double-quote identifiers, SMALLINT not TINYINT.
+    Fully idempotent — safe to run on every startup.
     """
     migrations = [
-        # table,         column,          DDL type
-        ("user",         "firebase_uid",  "VARCHAR(128) DEFAULT NULL"),
-        ("user",         "is_vip",        "TINYINT(1) NOT NULL DEFAULT 0"),
-        ("user",         "is_blocked",    "TINYINT(1) NOT NULL DEFAULT 0"),
-        ("user",         "wallet_balance","FLOAT NOT NULL DEFAULT 0"),
-        ("user",         "referred_by",   "INTEGER DEFAULT NULL"),
+        # table,    column,           DDL type (PostgreSQL compatible)
+        ("user",    "firebase_uid",   "VARCHAR(128) DEFAULT NULL"),
+        ("user",    "is_vip",         "SMALLINT NOT NULL DEFAULT 0"),
+        ("user",    "is_blocked",     "SMALLINT NOT NULL DEFAULT 0"),
+        ("user",    "wallet_balance", "FLOAT NOT NULL DEFAULT 0"),
+        ("user",    "referred_by",    "INTEGER DEFAULT NULL"),
     ]
     engine = db.engine
     with engine.connect() as conn:
         for table, column, col_def in migrations:
             try:
-                # MySQL 8.0.3+ supports IF NOT EXISTS; for older versions we
-                # check information_schema first so the statement never errors.
+                # PostgreSQL: check information_schema.columns with table_schema='public'
                 check_sql = (
-                    f"SELECT COUNT(*) FROM information_schema.COLUMNS "
-                    f"WHERE TABLE_SCHEMA = DATABASE() "
-                    f"AND TABLE_NAME = '{table}' "
-                    f"AND COLUMN_NAME = '{column}'"
+                    f"SELECT COUNT(*) FROM information_schema.columns "
+                    f"WHERE table_schema = 'public' "
+                    f"AND table_name = '{table}' "
+                    f"AND column_name = '{column}'"
                 )
                 result = conn.execute(db.text(check_sql))
                 exists = result.scalar()
                 if not exists:
+                    # PostgreSQL uses double-quotes for identifiers (not backticks)
                     conn.execute(db.text(
-                        f"ALTER TABLE `{table}` ADD COLUMN `{column}` {col_def}"
+                        f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_def}'
                     ))
                     conn.commit()
-                    print(f"✅ Migration: added column `{table}`.`{column}`")
+                    print(f'✅ Migration: added column "{table}"."{column}"')
             except Exception as e:
-                print(f"⚠️  Migration skipped for `{table}`.`{column}`: {e}")
+                print(f'⚠️  Migration skipped for "{table}"."{column}": {e}')
     print("✅ Column migrations complete")
 
 
@@ -3566,33 +3626,39 @@ def init_db():
             db.session.add(test_customer)
             print("✅ Test Customer created")
 
-        if not User.query.filter_by(college_id="owner").first():
-            test_owner = User(
+        # ── Owner account — credentials from .env ────────────────────────
+        _owner_id  = os.environ.get('OWNER_COLLEGE_ID', 'MMCOE_OWNER_2025')
+        _owner_pwd = os.environ.get('OWNER_PASSWORD',   'ChangeMe@Owner#1')
+        if not User.query.filter_by(college_id=_owner_id).first():
+            owner = User(
                 name="Admin Owner",
-                email="owner@test.com",
-                phone="8888888888",
-                college_id="owner",
-                password=generate_password_hash("pass123"),
+                email="owner@mmcoe.edu",
+                phone="0000000001",  # placeholder — staff don't need real phone
+                college_id=_owner_id,
+                password=generate_password_hash(_owner_pwd),
                 role="owner",
                 department="Management",
                 year="Staff"
             )
-            db.session.add(test_owner)
-            print("✅ Test Owner created")
+            db.session.add(owner)
+            print(f"✅ Owner account created (college_id: {_owner_id})")
 
-        if not User.query.filter_by(college_id="kitchen").first():
-            test_kitchen = User(
+        # ── Kitchen account — credentials from .env ───────────────────────
+        _kitchen_id  = os.environ.get('KITCHEN_COLLEGE_ID', 'MMCOE_KITCHEN_2025')
+        _kitchen_pwd = os.environ.get('KITCHEN_PASSWORD',   'ChangeMe@Kitchen#1')
+        if not User.query.filter_by(college_id=_kitchen_id).first():
+            kitchen = User(
                 name="Kitchen Staff",
-                email="kitchen@test.com",
-                phone="7777777777",
-                college_id="kitchen",
-                password=generate_password_hash("pass123"),
+                email="kitchen@mmcoe.edu",
+                phone="0000000002",  # placeholder — staff don't need real phone
+                college_id=_kitchen_id,
+                password=generate_password_hash(_kitchen_pwd),
                 role="kitchen",
                 department="Kitchen",
                 year="Staff"
             )
-            db.session.add(test_kitchen)
-            print("✅ Test Kitchen Staff created")
+            db.session.add(kitchen)
+            print(f"✅ Kitchen account created (college_id: {_kitchen_id})")
             
         db.session.commit()
 
@@ -3634,14 +3700,14 @@ if __name__ == '__main__':
     print("Server URL: http://localhost:5000")
     print("API Base: http://localhost:5000/api")
     print("CORS: Enabled for all origins")
-    print("\nTEST ACCOUNTS:")
-    print("   Customer: 9999999999 / pass123")
-    print("   Owner:    owner      / pass123")
+    print("\nACCOUNTS:")
+    print("   Customer: 9999999999 / pass123 (test only)")
+    print("   Owner:    set via OWNER_COLLEGE_ID + OWNER_PASSWORD in .env")
     print("   Kitchen:  kitchen    / pass123")
     print("\nNOTES:")
     print("   - OTP is displayed in console (no email service required)")
     print("   - All endpoints support CORS")
-    print("   - Database: MySQL (canteen_db)")
+    print("   - Database: Supabase PostgreSQL")
     print("="*70 + "\n")
 
 print("Blueprints registered")

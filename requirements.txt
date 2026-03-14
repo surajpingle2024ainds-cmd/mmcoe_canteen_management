@@ -3,9 +3,12 @@ Flask>=3.0.0,<4.0.0
 flask-cors>=4.0.0
 flask-sqlalchemy>=3.1.0
 
-# Database
+# Rate limiting (staff portal brute force protection)
+flask-limiter>=3.5.0
+
+# Database — Supabase PostgreSQL
 SQLAlchemy>=2.0.0
-PyMySQL>=1.1.0
+psycopg2-binary>=2.9.9
 
 # Environment Variables
 python-dotenv>=1.0.0
@@ -14,11 +17,11 @@ python-dotenv>=1.0.0
 PyJWT>=2.8.0
 Werkzeug>=3.0.0
 
-# HTTP Requests (used in utils/route_monitor.py)
+# HTTP Requests
 requests>=2.31.0
 
 # Firebase Admin SDK (server-side ID token verification)
 firebase-admin>=6.0.0
 
-# Smooth server
-gunicorn
+# Production server
+gunicorn>=22.0.0

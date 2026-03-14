@@ -1,0 +1,111 @@
+# =============================================================================
+# RENDER ENVIRONMENT VARIABLES — SUPABASE EDITION
+# Dashboard → Your Web Service → Environment → Add Environment Variable
+# =============================================================================
+
+# =============================================================================
+# DATABASE (Supabase PostgreSQL)
+#
+# HOW TO GET THIS URL:
+#   1. supabase.com → your project → Project Settings
+#   2. Database → Connection Pooling → Connection String
+#   3. Copy the URI — it looks like the example below
+#   4. Replace [YOUR-PASSWORD] with your actual DB password
+#
+# ⚠️  Use port 6543 (pooler) NOT port 5432 (direct)
+#     Port 6543 handles multiple Render workers correctly
+# =============================================================================
+KEY:   DATABASE_URL
+VALUE: postgresql://postgres:ESSENB24AD1097@db.ggghkywbgmmnyyqmcpbr.supabase.co:5432/postgres
+# =============================================================================
+# FLASK SECRET KEY
+# Already generated — do not change after first deploy
+# =============================================================================
+KEY:   SECRET_KEY
+VALUE: ee462ef2594acb485190f6b79bc5dcece4ebb20dc848be6e518e0b302cd64648
+
+# =============================================================================
+# FIREBASE
+# FIREBASE_PROJECT_ID → Firebase Console → Project Settings → General
+#                        → scroll down → copy "Project ID"
+#                        (looks like: essen-mmcoe-a1b2c3)
+# =============================================================================
+KEY:   FIREBASE_PROJECT_ID
+VALUE: eseen-d7867
+
+KEY:   FIREBASE_CREDENTIALS_PATH
+VALUE: ./firebase-credentials.json
+
+KEY:   FIREBASE_SKIP_VERIFY
+VALUE: false
+
+# =============================================================================
+# FLASK
+# =============================================================================
+KEY:   FLASK_ENV
+VALUE: production
+
+KEY:   FLASK_DEBUG
+VALUE: 0
+
+# =============================================================================
+# RENDER SECRET FILE
+# Dashboard → Your Web Service → Environment → Secret Files → Add Secret File
+#
+# HOW TO GET firebase-credentials.json:
+#   1. Firebase Console → Project Settings → Service Accounts
+#   2. Click "Generate new private key" → download JSON file
+#   3. Open the file in Notepad → Select All → Copy
+#   4. Paste the entire content into Render Secret Files below
+# =============================================================================
+Secret File Filename:  firebase-credentials.json
+Secret File Contents:  {
+  "type": "service_account",
+  "project_id": "eseen-d7867",
+  "private_key_id": "ef7d7aee7a9a97f48df098195816163ec29c4486",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEuwIBADANBgkqhkiG9w0BAQEFAASCBKUwggShAgEAAoIBAQDkVhGHhef79uBM\n0Kg9k/9zpWcfRRIk5mvKTWWMTkftnMXEkuU9qN3WRKO3V4a8gL8RElUGf9sjS/P4\nnJAk9YZx7/Oa5KeL9czZhMU8h0MPyG32utSWkn4CyAqev/y/g/W1EfnpBWmf5Vjt\nbaDzg9nzPo+mwr54V3emPQkWF7KVaasRiDuhPOdNb4Jv+qZAVJn1a4y/rpEDDLbr\nFwZ8JEg73HHlfI3Z7u7RIrJvvLT0Fpt4JawGr6sYLyO1a6t5wLlcnTqlXgeTl/4c\nmacY9MxgnpZgoSv8OlV7F4X8Llyo9wSjhRumk+5aF+rDXFtoowDFLfkbZMiwsAqF\nYEVhl+5pAgMBAAECgf8oBvl4zaEqUfRNdFPxfGXBjPAwqoHpPWHajVN0m/UylKmR\nw+t4nAhiP8oTDynEyMILJdaFiTG3Yy7Sq2T02yf03NUizOIoHgzsSSmluH9qRcuu\nMioJF+ZQNGA4EyYPVX2lvi0sQ6wf34vMUE/NdnUqxAg+K+wiivXPzySF4j94ALEc\ntoMWiguDPNfyqNtDRhcXNxHfclqA5hJaFGNYg1QLKKiDKcOhTelMo79sMUFbc68X\nEyyGCozF5GsaSwOMIiMQNs0csej1PltenFEQD6Tk5k10XOJhzLKoOE6O4bAZ019W\nzWI3uDDSJZDdwuSKw/Vn518rIkaYhmVaW33yE0ECgYEA9AVyyi4T3RQmc1PnaIBl\n2od4k0sxYZhBfOnZBNi/0zKDcrb4ngGWg1tEhGWYJO9kn62Kb4+Zx53GBdHSEIPL\nxDFypywoUNqm8+omv5rtTlwVnYyvuYiw8DAp45i+oP2VTHo8kTtI/KbjJZIlGn7n\n+R68Czz7A6ZV+r4ejmUqxEECgYEA74uCgsuUEVmwbF8JarNdxS4ttgA8I91RYaku\nwcKLGnRi05JGdn6lbJm5wX2HyhcVwLbsVeR2kuBQPjIDAIixMrbDSJbjS2hw7lxG\nxgPs0aHlzaW83e87OUakr/BzBbB6o3B3341+mmHK6b+r7QE4qovUB8q6VHypCKh+\nu8wegCkCgYAQOgSGGUZM3zgnVx7+PfuH6pZEBS4FdWB1c/9waRFoc+V1zWD+8NAX\ncAxAWZkia6DfVWTtQjlRotY2MNutKXZ1V2xuXWtY5RFRCvMErsK1AT6WuXI9/i71\n6d3/OnsCrZot+brpVW3nDxnvt6Yr+uBmGnsarDVs6rSw9c+GXIfZgQKBgFiDHD5o\nKtYeZeolU71xeXyai5lsjMxTwvZrJTPDRtMHnly+9/pg4Y83XkP4tmweC5OiA8HZ\nIVc0O3I/2Iwh9hffIFl6J5J9jP0Ga8BPQvpS8C8Exrza4O9RAxlfp6C6jRZHQIQC\nLH2vFOM6R7TTdrTN5hLa/e6qAWuJlwqdacfBAoGBAOAprxTQ0U1TYdBV1tDkdM+r\nSNKv52cgoz68xxoniGNd3hnUKWGKEjFEAclod9gsSJjdLPOk/gC4nX5Dagn9/Qsp\nhQ1nu9jw/RxY09T1RtjpyHCN5z5RXLGrlbYGZLvGLL6Tth9pEk4rKyfpp8vuZGxR\nY9Rn2H9m74+oyeZZIwKS\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@eseen-d7867.iam.gserviceaccount.com",
+  "client_id": "101163864496056628246",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40eseen-d7867.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
+
+
+# =============================================================================
+# AFTER DEPLOYMENT — run these 4 SQL commands in Supabase SQL Editor
+# Dashboard → SQL Editor → New Query → paste and run
+# =============================================================================
+
+-- 1. Create a restricted user for Flask (optional but recommended)
+CREATE USER flask_app WITH PASSWORD 'another-strong-password';
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO flask_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO flask_app;
+
+-- 2. Revoke public access
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+
+-- 3. Enable RLS on sensitive tables
+ALTER TABLE "user" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "order" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "order_item" ENABLE ROW LEVEL SECURITY;
+
+-- 4. Allow Flask backend full access via service role
+CREATE POLICY "backend_full_access" ON "user" USING (true) WITH CHECK (true);
+CREATE POLICY "backend_full_access" ON "order" USING (true) WITH CHECK (true);
+CREATE POLICY "backend_full_access" ON "order_item" USING (true) WITH CHECK (true);
+
+# =============================================================================
+# SUMMARY — all 7 env vars at a glance
+# =============================================================================
+# DATABASE_URL            ← from Supabase (port 6543 pooler URL)
+# SECRET_KEY              ← already filled above
+# FIREBASE_PROJECT_ID     ← from Firebase Console
+# FIREBASE_CREDENTIALS_PATH ← ./firebase-credentials.json (keep as-is)
+# FIREBASE_SKIP_VERIFY    ← false (keep as-is)
+# FLASK_ENV               ← production (keep as-is)
+# FLASK_DEBUG             ← 0 (keep as-is)
+# =============================================================================
