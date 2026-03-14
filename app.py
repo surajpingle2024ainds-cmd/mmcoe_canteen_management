@@ -3660,11 +3660,13 @@ def init_db():
             
         db.session.commit()
 
-if __name__ == '__main__':
-    # Initialize database
-    init_db()
-    
-    # Register blueprints
+# =============================================================================
+# STARTUP — runs on both gunicorn import AND direct python app.py
+# Blueprints + DB init must be outside if __name__ so gunicorn gets them
+# =============================================================================
+
+# Register blueprints
+try:
     from financial_reports import financial_reports_bp
     from customer_management import customer_management_bp
     from owner_analytics_dashboard import owner_analytics_bp
@@ -3673,6 +3675,8 @@ if __name__ == '__main__':
     from real_time_orders import kitchen_orders_bp
     from menu_availability import menu_availability_bp
     from kitchen_analytics import kitchen_analytics_bp
+    from advanced_features import advanced_features_bp
+    from chatbot_routes import chatbot_bp
 
     app.register_blueprint(financial_reports_bp)
     app.register_blueprint(customer_management_bp)
@@ -3682,18 +3686,19 @@ if __name__ == '__main__':
     app.register_blueprint(kitchen_orders_bp)
     app.register_blueprint(menu_availability_bp)
     app.register_blueprint(kitchen_analytics_bp)
-    
-    # Register advanced features blueprint
-    from advanced_features import advanced_features_bp
     app.register_blueprint(advanced_features_bp)
-    
-    # Register chatbot blueprint
-    from chatbot_routes import chatbot_bp
     app.register_blueprint(chatbot_bp)
-    
+    logger.info("Blueprints registered")
+except Exception as e:
+    logger.warning(f"Some blueprints failed to load: {e}")
 
-    logger.info("MMCOE Smart Canteen backend started")
+# Initialize database (runs on every startup — idempotent)
+with app.app_context():
+    init_db()
 
-logger.info("Blueprints registered")
-# Run server
-app.run(debug=not _is_prod, port=int(os.environ.get('PORT', 5000)), host='0.0.0.0')
+# =============================================================================
+# app.run() — only when running directly (python app.py)
+# Gunicorn does NOT use this — it imports the app object directly
+# =============================================================================
+if __name__ == '__main__':
+    app.run(debug=not _is_prod, port=int(os.environ.get('PORT', 5000)), host='0.0.0.0')
