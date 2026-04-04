@@ -2773,14 +2773,16 @@ def upload_image():
  
         if upload_resp.status_code not in (200, 201):
             logger.error(f"Supabase Storage upload failed: {upload_resp.status_code} {upload_resp.text}")
+            # Return full Supabase error so we can see exactly what's wrong
             return jsonify({
-                'error': f'Storage upload failed ({upload_resp.status_code}): {upload_resp.text}'
+                'error': f'Storage upload failed',
+                'supabase_status': upload_resp.status_code,
+                'supabase_response': upload_resp.text,
+                'storage_url_attempted': storage_url,
             }), 500
  
         # ── Build the permanent public URL ────────────────────────────────
-        # Format: {SUPABASE_URL}/storage/v1/object/public/menu-images/{filename}
         image_url = f"{supabase_url}/storage/v1/object/public/menu-images/{unique_filename}"
- 
         logger.info(f"Image uploaded to Supabase Storage: {image_url}")
  
         return jsonify({
