@@ -23,5 +23,8 @@ requests>=2.31.0
 # Firebase Admin SDK (server-side ID token verification)
 firebase-admin>=6.0.0
 
+# Supabase Storage — persistent image hosting (replaces ephemeral local disk)
+supabase>=2.4.0
+
 # Production server
 gunicorn>=22.0.0

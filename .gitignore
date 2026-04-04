@@ -35,8 +35,8 @@ Thumbs.db
 # SECRETS — NEVER commit these
 # =============================================================================
 .env
-.env.*
-*.env
+
+
 firebase-credentials.json
 google-services.json          # Flutter Android Firebase config
 GoogleService-Info.plist      # Flutter iOS Firebase config

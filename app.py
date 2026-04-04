@@ -101,6 +101,23 @@ import base64 as _base64
 import time as _time
 
 
+BASE_URL = 'https://essen-backend-uml5.onrender.com'
+
+def _resolve_image_url(raw: str) -> str:
+    """
+    Convert a stored image path to a full absolute URL.
+    - Already absolute (http/https): returned as-is.
+    - Relative path (e.g. /static/images/menu/abc.jpg): prepend BASE_URL.
+    - Empty string: returned as empty so Flutter falls back to the emoji icon.
+    """
+    if not raw:
+        return ''
+    if raw.startswith('http://') or raw.startswith('https://'):
+        return raw
+    # relative path → prepend base
+    return BASE_URL + raw if raw.startswith('/') else BASE_URL + '/' + raw
+
+
 def _decode_token_claims_only(id_token: str) -> dict:
     """Decode token payload WITHOUT verifying signature. Dev/fallback only."""
     parts = id_token.split('.')
@@ -1143,7 +1160,7 @@ def get_all_menu():
             'category': item.category,
             'available': item.available,
             'tags': item.tags,
-            'image_url': item.image_url or ''
+            'image_url': _resolve_image_url(item.image_url or '')
         } for item in items]), 200
     except Exception as e:
         logger.error(f"Menu error: {e}")
@@ -1185,7 +1202,7 @@ def get_today_menu():
                 'desc': item.description,
                 'category': item.category,
                 'tags': item.tags,
-                'image_url': item.image_url or ''
+                'image_url': _resolve_image_url(item.image_url or '')
             })
         
         return jsonify(result), 200
@@ -2052,12 +2069,14 @@ def serialize_order(order: Order):
     try:
         for it in order.items:
             if it and it.menu_item:
+                raw_image = it.menu_item.image_url or ''
                 items_list.append({
                     'id': it.menu_item_id,
                     'name': it.menu_item.name or 'Unknown Item',
                     'icon': it.menu_item.icon or '🍽️',
                     'quantity': it.quantity,
                     'price': it.price,
+                    'image_url': _resolve_image_url(raw_image),
                 })
     except Exception as e:
         logger.error(f"Order serialization error: {e}")
@@ -2101,6 +2120,22 @@ def api_order_history():
             return jsonify({'error': 'Unauthorized'}), 401
         orders = Order.query.filter_by(user_id=user.id).order_by(Order.created_at.desc()).all()
         return jsonify([serialize_order(o) for o in orders]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orders/<string:order_id>', methods=['GET', 'OPTIONS'])
+def api_get_order(order_id):
+    """Return a single order by its order_id string. Used by the tracking screen to poll live status."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        order = Order.query.filter_by(order_id=order_id, user_id=user.id).first()
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        return jsonify(serialize_order(order)), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -2659,55 +2694,117 @@ def owner_set_menu_availability(item_id):
 # ==================== IMAGE UPLOAD ENDPOINT ====================
 @app.route('/api/upload/image', methods=['POST', 'OPTIONS'])
 def upload_image():
-    """Upload image for menu items (owner only)"""
+    """Upload image to Supabase Storage and return the public URL.
+ 
+    Previous implementation saved to Render's local filesystem which is
+    ephemeral — files were wiped on every deploy/restart.  This version
+    pushes the file directly to the Supabase 'menu-images' bucket so the
+    URL is permanent and accessible by the Flutter app.
+ 
+    Required environment variables (set in Render dashboard):
+        SUPABASE_URL       e.g. https://ggghkywbgmmnyyqmcpbr.supabase.co
+        SUPABASE_SERVICE_KEY  the service_role key (NOT the anon key)
+                              Settings → API → service_role secret
+    """
     if request.method == 'OPTIONS':
         return '', 204
-    
+ 
     try:
         user = get_auth_user()
         if not user or user.role != 'owner':
             return jsonify({'error': 'Unauthorized - Owner access required'}), 401
-        
-        # Check if file is present
+ 
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
-        
+ 
         file = request.files['file']
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
-        
-        # Check file extension
+ 
         allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-        filename = file.filename.lower()
-        if '.' not in filename or filename.rsplit('.', 1)[1] not in allowed_extensions:
+        original_name = file.filename.lower()
+        if '.' not in original_name or original_name.rsplit('.', 1)[1] not in allowed_extensions:
             return jsonify({'error': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'}), 400
-        
-        # Create upload directory if it doesn't exist
-        upload_folder = os.path.join('static', 'images', 'menu')
-        os.makedirs(upload_folder, exist_ok=True)
-        
-        # Generate unique filename
-        import uuid
-        file_ext = filename.rsplit('.', 1)[1]
+ 
+        import uuid, requests as _req
+        file_ext = original_name.rsplit('.', 1)[1]
+        # jpeg → jpg for consistency
+        if file_ext == 'jpeg':
+            file_ext = 'jpg'
         unique_filename = f"{uuid.uuid4().hex[:12]}.{file_ext}"
-        filepath = os.path.join(upload_folder, unique_filename)
-        
-        # Save file
-        file.save(filepath)
-        
-        # Return URL
-        image_url = f"/static/images/menu/{unique_filename}"
-        
+ 
+        # ── Read Supabase credentials from environment ────────────────────
+        supabase_url = os.environ.get('SUPABASE_URL', '').rstrip('/')
+        service_key  = os.environ.get('SUPABASE_SERVICE_KEY', '')
+ 
+        if not supabase_url or not service_key:
+            # Fallback: save locally (dev only — not persistent on Render)
+            logger.warning('SUPABASE_URL or SUPABASE_SERVICE_KEY not set — saving locally')
+            upload_folder = os.path.join('static', 'images', 'menu')
+            os.makedirs(upload_folder, exist_ok=True)
+            filepath = os.path.join(upload_folder, unique_filename)
+            file.save(filepath)
+            image_url = f"{BASE_URL}/static/images/menu/{unique_filename}"
+            return jsonify({'success': True, 'image_url': image_url, 'filename': unique_filename}), 200
+ 
+        # ── Upload to Supabase Storage ────────────────────────────────────
+        file_bytes = file.read()
+ 
+        content_type_map = {
+            'jpg':  'image/jpeg',
+            'png':  'image/png',
+            'gif':  'image/gif',
+            'webp': 'image/webp',
+        }
+        content_type = content_type_map.get(file_ext, 'application/octet-stream')
+ 
+        storage_url = f"{supabase_url}/storage/v1/object/menu-images/{unique_filename}"
+ 
+        upload_resp = _req.post(
+            storage_url,
+            headers={
+                'Authorization': f'Bearer {service_key}',
+                'Content-Type': content_type,
+                'x-upsert': 'true',   # overwrite if same name
+            },
+            data=file_bytes,
+            timeout=30,
+        )
+ 
+        if upload_resp.status_code not in (200, 201):
+            logger.error(f"Supabase Storage upload failed: {upload_resp.status_code} {upload_resp.text}")
+            return jsonify({
+                'error': f'Storage upload failed ({upload_resp.status_code}): {upload_resp.text}'
+            }), 500
+ 
+        # ── Build the permanent public URL ────────────────────────────────
+        # Format: {SUPABASE_URL}/storage/v1/object/public/menu-images/{filename}
+        image_url = f"{supabase_url}/storage/v1/object/public/menu-images/{unique_filename}"
+ 
+        logger.info(f"Image uploaded to Supabase Storage: {image_url}")
+ 
         return jsonify({
             'success': True,
             'image_url': image_url,
-            'filename': unique_filename
+            'filename': unique_filename,
         }), 200
-        
+ 
     except Exception as e:
         logger.error(f"Image upload error: {e}")
-
         return jsonify({'error': str(e)}), 500
+ 
+
+# ==================== DEBUG ENV ENDPOINT ====================
+@app.route('/api/debug/env', methods=['GET'])
+def debug_env():
+    supabase_url = os.environ.get('SUPABASE_URL', 'NOT SET')
+    service_key  = os.environ.get('SUPABASE_SERVICE_KEY', '')
+    all_supa_keys = [k for k in os.environ.keys() if 'SUPA' in k.upper()]
+    return jsonify({
+        'SUPABASE_URL': supabase_url,
+        'SUPABASE_SERVICE_KEY': f'SET ({len(service_key)} chars)' if service_key else 'NOT SET',
+        'related_env_keys': all_supa_keys,
+    })
 
 # ==================== OWNER: ADD NEW DISH ====================
 @app.route('/api/owner/menu/add', methods=['POST', 'OPTIONS'])
