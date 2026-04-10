@@ -227,14 +227,16 @@ class ComboItem(db.Model):
 class Offer(db.Model):
     __tablename__ = 'offer'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.String(500))
-    discount_percent = db.Column(db.Float, nullable=False)  # e.g., 20 for 20%
-    start_date = db.Column(db.DateTime, nullable=False)
-    end_date = db.Column(db.DateTime, nullable=True)  # NULL means no expiry
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    title = db.Column(db.Text, nullable=False)                          # maps to DB 'title'
+    subtitle = db.Column(db.Text, nullable=False, default='')           # maps to DB 'subtitle'
+    emoji = db.Column(db.Text, nullable=False, default='🎉')            # maps to DB 'emoji'
+    color = db.Column(db.Text, nullable=False, default='0xFFEF9F27')    # maps to DB 'color'
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)   # maps to DB 'expires_at' (NULL = no expiry)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)     # maps to DB 'is_active'
+    discount_percent = db.Column(db.Float, nullable=False, default=0)   # maps to DB 'discount_percent'
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=datetime.utcnow)  # maps to DB 'created_at'
+    # NOTE: DB columns name/description/start_date/end_date are GENERATED (computed) columns
+    # and must NOT be written to; they are read-only aliases handled by Postgres.
 
 class DailyOrderLog(db.Model):
     __tablename__ = 'daily_order_log'

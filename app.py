@@ -1177,8 +1177,7 @@ def get_today_menu():
         # Check for active offer
         active_offer = Offer.query.filter(
             Offer.is_active == True,
-            Offer.start_date <= datetime.utcnow(),
-            or_(Offer.end_date.is_(None), Offer.end_date >= datetime.utcnow())
+            or_(Offer.expires_at.is_(None), Offer.expires_at >= datetime.utcnow())
         ).order_by(Offer.created_at.desc()).first()
         
         discount_percent = 0
@@ -1238,8 +1237,7 @@ def create_order():
         try:
             active_offer = Offer.query.filter(
                 Offer.is_active == True,
-                Offer.start_date <= datetime.utcnow(),
-                or_(Offer.end_date.is_(None), Offer.end_date >= datetime.utcnow())
+                or_(Offer.expires_at.is_(None), Offer.expires_at >= datetime.utcnow())
             ).order_by(Offer.created_at.desc()).first()
             if active_offer:
                 discount_percent = active_offer.discount_percent or 0
@@ -2872,8 +2870,7 @@ def get_active_offer():
     try:
         active_offer = Offer.query.filter(
             Offer.is_active == True,
-            Offer.start_date <= datetime.utcnow(),
-            or_(Offer.end_date.is_(None), Offer.end_date >= datetime.utcnow())
+            or_(Offer.expires_at.is_(None), Offer.expires_at >= datetime.utcnow())
         ).order_by(Offer.created_at.desc()).first()
         
         if not active_offer:
@@ -2883,13 +2880,13 @@ def get_active_offer():
             'active': True,
             'offer': {
                 'id': active_offer.id,
-                'title': active_offer.name,          # ← was 'name'
-                'subtitle': active_offer.description, # ← was 'description'
+                'title': active_offer.title,
+                'subtitle': active_offer.subtitle,
                 'discount_percent': active_offer.discount_percent,
-                'expires_at': active_offer.end_date.isoformat() if active_offer.end_date else None,  # ← was 'end_date'
-                'emoji': '🎉',       # ← add default
-                'color': '0xFFFFE0B2',  # ← add default
-                'start_date': active_offer.start_date.isoformat() if active_offer.start_date else None
+                'expires_at': active_offer.expires_at.isoformat() if active_offer.expires_at else None,
+                'emoji': active_offer.emoji,
+                'color': active_offer.color,
+                'created_at': active_offer.created_at.isoformat() if active_offer.created_at else None
             }
         }), 200
     except Exception as e:
@@ -2908,11 +2905,13 @@ def owner_list_offers():
         offers = Offer.query.order_by(Offer.created_at.desc()).all()
         return jsonify([{
             'id': o.id,
-            'name': o.name,
-            'description': o.description,
+            'title': o.title,
+            'subtitle': o.subtitle,
+            'emoji': o.emoji,
+            'color': o.color,
             'discount_percent': o.discount_percent,
-            'start_date': o.start_date.isoformat() if o.start_date else None,
-            'end_date': o.end_date.isoformat() if o.end_date else None,
+            'expires_at': o.expires_at.isoformat() if o.expires_at else None,
+            'created_at': o.created_at.isoformat() if o.created_at else None,
             'is_active': o.is_active
         } for o in offers]), 200
     except Exception as e:
@@ -2929,42 +2928,37 @@ def owner_create_offer():
             return jsonify({'error': 'Unauthorized'}), 401
         
         data = request.get_json() or {}
-        name = data.get('name', '').strip()
+        title = data.get('title', '').strip()
+        subtitle = data.get('subtitle', '').strip()
+        emoji = data.get('emoji', '🎉').strip() or '🎉'
+        color = data.get('color', '0xFFEF9F27').strip() or '0xFFEF9F27'
         discount_percent = float(data.get('discount_percent', 0))
-        start_date_str = data.get('start_date')
-        end_date_str = data.get('end_date')  # Can be None
+        expires_at_str = data.get('expires_at')  # Optional; None means no expiry
         
-        if not name or discount_percent <= 0:
-            return jsonify({'error': 'Name and discount percent are required'}), 400
+        if not title or discount_percent <= 0:
+            return jsonify({'error': 'Title and discount_percent are required'}), 400
         
-        # Deactivate all existing offers
+        # Deactivate all existing active offers (only one active offer at a time)
         existing_offers = Offer.query.filter(Offer.is_active == True).all()
-        for offer in existing_offers:
-            offer.is_active = False
-        db.session.commit()
+        for o in existing_offers:
+            o.is_active = False
+        db.session.flush()
         
-        start_date = datetime.utcnow()
-        if start_date_str:
+        expires_at = None
+        if expires_at_str:
             try:
-                start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
-            except:
-                pass
-        
-        end_date = None
-        if end_date_str:
-            try:
-                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
-            except:
+                expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+            except Exception:
                 pass
         
         offer = Offer(
-            name=name,
-            description=data.get('description', '').strip(),
+            title=title,
+            subtitle=subtitle,
+            emoji=emoji,
+            color=color,
             discount_percent=discount_percent,
-            start_date=start_date,
-            end_date=end_date,
-            is_active=True,
-            created_by=user.id
+            expires_at=expires_at,
+            is_active=True
         )
         db.session.add(offer)
         db.session.commit()
@@ -2973,7 +2967,7 @@ def owner_create_offer():
             'success': True,
             'offer': {
                 'id': offer.id,
-                'name': offer.name,
+                'title': offer.title,
                 'discount_percent': offer.discount_percent
             }
         }), 201
@@ -2996,27 +2990,26 @@ def owner_update_offer(offer_id):
             return jsonify({'error': 'Offer not found'}), 404
         
         data = request.get_json() or {}
-        if 'name' in data:
-            offer.name = data['name'].strip()
-        if 'description' in data:
-            offer.description = data['description'].strip()
+        if 'title' in data:
+            offer.title = data['title'].strip()
+        if 'subtitle' in data:
+            offer.subtitle = data['subtitle'].strip()
+        if 'emoji' in data:
+            offer.emoji = data['emoji'].strip() or '🎉'
+        if 'color' in data:
+            offer.color = data['color'].strip() or '0xFFEF9F27'
         if 'discount_percent' in data:
             offer.discount_percent = float(data['discount_percent'])
         if 'is_active' in data:
             offer.is_active = bool(data['is_active'])
-        if 'start_date' in data:
-            try:
-                offer.start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
-            except:
-                pass
-        if 'end_date' in data:
-            if data['end_date']:
+        if 'expires_at' in data:
+            if data['expires_at']:
                 try:
-                    offer.end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
-                except:
+                    offer.expires_at = datetime.fromisoformat(data['expires_at'].replace('Z', '+00:00'))
+                except Exception:
                     pass
             else:
-                offer.end_date = None
+                offer.expires_at = None
         
         db.session.commit()
         return jsonify({'success': True}), 200
