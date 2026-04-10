@@ -2883,11 +2883,13 @@ def get_active_offer():
             'active': True,
             'offer': {
                 'id': active_offer.id,
-                'name': active_offer.name,
-                'description': active_offer.description,
+                'title': active_offer.name,          # ← was 'name'
+                'subtitle': active_offer.description, # ← was 'description'
                 'discount_percent': active_offer.discount_percent,
-                'start_date': active_offer.start_date.isoformat() if active_offer.start_date else None,
-                'end_date': active_offer.end_date.isoformat() if active_offer.end_date else None
+                'expires_at': active_offer.end_date.isoformat() if active_offer.end_date else None,  # ← was 'end_date'
+                'emoji': '🎉',       # ← add default
+                'color': '0xFFFFE0B2',  # ← add default
+                'start_date': active_offer.start_date.isoformat() if active_offer.start_date else None
             }
         }), 200
     except Exception as e:
