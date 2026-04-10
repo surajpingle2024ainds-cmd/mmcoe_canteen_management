@@ -2,7 +2,7 @@
 {% block title %}Manage Offers{% endblock %}
 {% block content %}
 <div class="card">
-    <h2 class="section-title">🎁 Manage Offers & Discounts</h2>
+    <h2 class="section-title">🎁 Manage Offers &amp; Discounts</h2>
     <div style="margin-bottom:20px">
         <button class="btn" onclick="showCreateOfferForm()">➕ Create New Offer</button>
     </div>
@@ -11,31 +11,55 @@
 
 <!-- Create/Edit Offer Modal -->
 <div id="offerModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center">
-    <div style="background:#fff;padding:30px;border-radius:16px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto">
-        <h3 style="margin-bottom:20px">Create Offer</h3>
+    <div style="background:#fff;padding:30px;border-radius:16px;max-width:520px;width:90%;max-height:90vh;overflow-y:auto">
+        <h3 id="offerModalTitle" style="margin-bottom:20px">Create Offer</h3>
         <div style="display:flex;flex-direction:column;gap:16px">
+
             <div>
-                <label style="display:block;margin-bottom:6px;font-weight:700">Offer Name *</label>
-                <input type="text" id="offerName" placeholder="e.g., Weekend Special" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
+                <label style="display:block;margin-bottom:6px;font-weight:700">Offer Title *</label>
+                <input type="text" id="offerTitle" placeholder="e.g., Weekend Special"
+                    style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;box-sizing:border-box" />
             </div>
+
             <div>
-                <label style="display:block;margin-bottom:6px;font-weight:700">Description</label>
-                <textarea id="offerDescription" placeholder="Optional description" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;min-height:80px"></textarea>
+                <label style="display:block;margin-bottom:6px;font-weight:700">Subtitle / Description</label>
+                <textarea id="offerSubtitle" placeholder="e.g., Flat 20% off on all items this weekend!"
+                    style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;min-height:70px;box-sizing:border-box"></textarea>
             </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div>
+                    <label style="display:block;margin-bottom:6px;font-weight:700">Emoji</label>
+                    <input type="text" id="offerEmoji" value="🎉" maxlength="4"
+                        style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;font-size:20px;text-align:center;box-sizing:border-box" />
+                </div>
+                <div>
+                    <label style="display:block;margin-bottom:6px;font-weight:700">Card Color (hex)</label>
+                    <select id="offerColor" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;box-sizing:border-box">
+                        <option value="0xFFEF9F27">🟠 Orange (default)</option>
+                        <option value="0xFFE53935">🔴 Red</option>
+                        <option value="0xFF43A047">🟢 Green</option>
+                        <option value="0xFF1E88E5">🔵 Blue</option>
+                        <option value="0xFF8E24AA">🟣 Purple</option>
+                        <option value="0xFFFFB300">🟡 Amber</option>
+                    </select>
+                </div>
+            </div>
+
             <div>
                 <label style="display:block;margin-bottom:6px;font-weight:700">Discount % *</label>
-                <input type="number" id="offerDiscount" placeholder="e.g., 20 for 20% off" min="1" max="100" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
+                <input type="number" id="offerDiscount" placeholder="e.g., 20 for 20% off" min="1" max="100"
+                    style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;box-sizing:border-box" />
             </div>
+
             <div>
-                <label style="display:block;margin-bottom:6px;font-weight:700">Start Date</label>
-                <input type="datetime-local" id="offerStartDate" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
+                <label style="display:block;margin-bottom:6px;font-weight:700">Expires At (optional — leave empty for no expiry)</label>
+                <input type="datetime-local" id="offerExpiresAt"
+                    style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;box-sizing:border-box" />
             </div>
-            <div>
-                <label style="display:block;margin-bottom:6px;font-weight:700">End Date (Optional - leave empty for no expiry)</label>
-                <input type="datetime-local" id="offerEndDate" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px" />
-            </div>
+
             <div style="display:flex;gap:12px">
-                <button class="btn" onclick="saveOffer()" style="flex:1">Save</button>
+                <button class="btn" onclick="saveOffer()" style="flex:1">💾 Save Offer</button>
                 <button class="btn ghost" onclick="closeOfferModal()" style="flex:1">Cancel</button>
             </div>
         </div>
@@ -46,131 +70,161 @@
 (async function(){
   const token = localStorage.getItem('authToken') || '';
   let editingOfferId = null;
-  
+
+  /* ── helpers ───────────────────────────────────────────── */
+  function fmtDate(iso){ return iso ? new Date(iso).toLocaleString() : '—'; }
+
+  function colorLabel(hex){
+    const map = {
+      '0xFFEF9F27':'🟠 Orange','0xFFE53935':'🔴 Red','0xFF43A047':'🟢 Green',
+      '0xFF1E88E5':'🔵 Blue','0xFF8E24AA':'🟣 Purple','0xFFFFB300':'🟡 Amber'
+    };
+    return map[hex] || hex;
+  }
+
+  /* ── load & render list ─────────────────────────────────── */
   async function loadOffers(){
     try{
-      const res = await fetch('/api/owner/offers', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
-      const offers = await res.json();
+      const res  = await fetch('/api/owner/offers', { headers: authHeader() });
+      const data = await res.json();
       const root = document.getElementById('offersList');
-      
-      if(!Array.isArray(offers) || !offers.length){
+
+      if(!Array.isArray(data) || !data.length){
         root.innerHTML = '<div class="muted">No offers created yet.</div>';
         return;
       }
-      
-      root.innerHTML = offers.map(function(o){
-        const isActive = o.is_active;
-        const startDate = o.start_date ? new Date(o.start_date).toLocaleString() : '—';
-        const endDate = o.end_date ? new Date(o.end_date).toLocaleString() : 'No expiry';
-        
+
+      root.innerHTML = data.map(function(o){
+        const isActive  = o.is_active;
+        const createdAt = fmtDate(o.created_at);
+        const expiresAt = o.expires_at ? fmtDate(o.expires_at) : 'No expiry';
+
         return `
-          <div style="border:2px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px;background:${isActive ? '#f0fdf4' : '#f8fafc'}">
+          <div style="border:2px solid ${isActive ? '#22c55e' : '#e5e7eb'};border-radius:12px;padding:16px;margin-bottom:12px;background:${isActive ? '#f0fdf4' : '#f8fafc'}">
             <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
               <div>
-                <h3 style="margin:0;color:#111827">${o.name} ${isActive ? '<span style="background:#22c55e;color:#fff;padding:4px 8px;border-radius:6px;font-size:12px;margin-left:8px">ACTIVE</span>' : ''}</h3>
-                <div style="color:#64748b;margin-top:4px">${o.description || 'No description'}</div>
+                <h3 style="margin:0;color:#111827">
+                  ${o.emoji || '🎉'} ${o.title}
+                  ${isActive ? '<span style="background:#22c55e;color:#fff;padding:4px 8px;border-radius:6px;font-size:12px;margin-left:8px">ACTIVE</span>' : ''}
+                </h3>
+                <div style="color:#64748b;margin-top:4px">${o.subtitle || '<em>No subtitle</em>'}</div>
               </div>
-              <div style="display:flex;gap:8px">
-                <button class="btn" style="padding:6px 12px;font-size:14px" onclick="editOffer(${o.id})">Edit</button>
-                <button class="btn" style="padding:6px 12px;font-size:14px;background:${isActive ? '#ef4444' : '#22c55e'}" onclick="toggleOffer(${o.id}, ${!isActive})">${isActive ? 'Deactivate' : 'Activate'}</button>
-                <button class="btn" style="padding:6px 12px;font-size:14px;background:#ef4444" onclick="deleteOffer(${o.id})">Delete</button>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn" style="padding:6px 12px;font-size:14px" onclick="editOffer(${o.id})">✏️ Edit</button>
+                <button class="btn" style="padding:6px 12px;font-size:14px;background:${isActive ? '#ef4444' : '#22c55e'}"
+                    onclick="toggleOffer(${o.id}, ${!isActive})">${isActive ? 'Deactivate' : 'Activate'}</button>
+                <button class="btn" style="padding:6px 12px;font-size:14px;background:#ef4444" onclick="deleteOffer(${o.id})">🗑 Delete</button>
               </div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:12px">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;font-size:14px">
               <div><strong>Discount:</strong> ${o.discount_percent}%</div>
-              <div><strong>Start:</strong> ${startDate}</div>
-              <div><strong>End:</strong> ${endDate}</div>
+              <div><strong>Color:</strong> ${colorLabel(o.color)}</div>
+              <div><strong>Created:</strong> ${createdAt}</div>
+              <div><strong>Expires:</strong> ${expiresAt}</div>
             </div>
           </div>
         `;
       }).join('');
+
     }catch(e){
       document.getElementById('offersList').textContent = 'Failed to load offers.';
       console.error(e);
     }
   }
-  
+
+  /* ── auth header helper ─────────────────────────────────── */
+  function authHeader(){
+    return token ? { 'Authorization': 'Bearer ' + token } : {};
+  }
+
+  /* ── show create form ───────────────────────────────────── */
   window.showCreateOfferForm = function(){
     editingOfferId = null;
-    document.getElementById('offerName').value = '';
-    document.getElementById('offerDescription').value = '';
-    document.getElementById('offerDiscount').value = '';
-    document.getElementById('offerStartDate').value = '';
-    document.getElementById('offerEndDate').value = '';
+    document.getElementById('offerModalTitle').textContent = 'Create New Offer';
+    document.getElementById('offerTitle').value      = '';
+    document.getElementById('offerSubtitle').value   = '';
+    document.getElementById('offerEmoji').value      = '🎉';
+    document.getElementById('offerColor').value      = '0xFFEF9F27';
+    document.getElementById('offerDiscount').value   = '';
+    document.getElementById('offerExpiresAt').value  = '';
     document.getElementById('offerModal').style.display = 'flex';
   };
-  
+
   window.closeOfferModal = function(){
     document.getElementById('offerModal').style.display = 'none';
   };
-  
+
+  /* ── save (create or update) ────────────────────────────── */
   window.saveOffer = async function(){
-    const name = document.getElementById('offerName').value.trim();
-    const discount = parseFloat(document.getElementById('offerDiscount').value);
-    const description = document.getElementById('offerDescription').value.trim();
-    const startDate = document.getElementById('offerStartDate').value;
-    const endDate = document.getElementById('offerEndDate').value;
-    
-    if(!name || !discount || discount <= 0){
-      alert('Please fill in offer name and discount %');
+    const title         = document.getElementById('offerTitle').value.trim();
+    const subtitle      = document.getElementById('offerSubtitle').value.trim();
+    const emoji         = document.getElementById('offerEmoji').value.trim() || '🎉';
+    const color         = document.getElementById('offerColor').value || '0xFFEF9F27';
+    const discount      = parseFloat(document.getElementById('offerDiscount').value);
+    const expiresAtRaw  = document.getElementById('offerExpiresAt').value;
+
+    if(!title || !discount || discount <= 0){
+      alert('Please fill in Offer Title and Discount %');
       return;
     }
-    
+
+    const payload = {
+      title:            title,
+      subtitle:         subtitle,
+      emoji:            emoji,
+      color:            color,
+      discount_percent: discount,
+      expires_at:       expiresAtRaw ? new Date(expiresAtRaw).toISOString() : null
+    };
+
     try{
-      const data = {
-        name: name,
-        discount_percent: discount,
-        description: description,
-        start_date: startDate ? new Date(startDate).toISOString() : null,
-        end_date: endDate ? new Date(endDate).toISOString() : null
-      };
-      
       let res;
       if(editingOfferId){
         res = await fetch('/api/owner/offers/' + editingOfferId, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' },
-          body: JSON.stringify(data)
+          method:  'PUT',
+          headers: Object.assign({ 'Content-Type': 'application/json' }, authHeader()),
+          body:    JSON.stringify(payload)
         });
       } else {
         res = await fetch('/api/owner/offers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' },
-          body: JSON.stringify(data)
+          method:  'POST',
+          headers: Object.assign({ 'Content-Type': 'application/json' }, authHeader()),
+          body:    JSON.stringify(payload)
         });
       }
-      
+
       if(res.ok){
         closeOfferModal();
         loadOffers();
-        alert('Offer saved successfully!');
+        alert(editingOfferId ? 'Offer updated!' : 'Offer created and activated!');
       } else {
-        const err = await res.json();
-        alert('Error: ' + (err.error || 'Failed to save'));
+        const err = await res.json().catch(()=>({}));
+        alert('Error: ' + (err.error || 'Failed to save offer'));
       }
     }catch(e){
       alert('Error saving offer: ' + e.message);
     }
   };
-  
+
+  /* ── edit — populate form from list ────────────────────── */
   window.editOffer = async function(id){
     editingOfferId = id;
     try{
-      const res = await fetch('/api/owner/offers', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
+      const res    = await fetch('/api/owner/offers', { headers: authHeader() });
       const offers = await res.json();
-      const offer = offers.find(function(o){ return o.id === id; });
-      
+      const offer  = offers.find(function(o){ return o.id === id; });
+
       if(offer){
-        document.getElementById('offerName').value = offer.name;
-        document.getElementById('offerDescription').value = offer.description || '';
-        document.getElementById('offerDiscount').value = offer.discount_percent;
-        if(offer.start_date){
-          const start = new Date(offer.start_date);
-          document.getElementById('offerStartDate').value = start.toISOString().slice(0,16);
-        }
-        if(offer.end_date){
-          const end = new Date(offer.end_date);
-          document.getElementById('offerEndDate').value = end.toISOString().slice(0,16);
+        document.getElementById('offerModalTitle').textContent = 'Edit Offer';
+        document.getElementById('offerTitle').value     = offer.title    || '';
+        document.getElementById('offerSubtitle').value  = offer.subtitle || '';
+        document.getElementById('offerEmoji').value     = offer.emoji    || '🎉';
+        document.getElementById('offerColor').value     = offer.color    || '0xFFEF9F27';
+        document.getElementById('offerDiscount').value  = offer.discount_percent;
+        if(offer.expires_at){
+          document.getElementById('offerExpiresAt').value = new Date(offer.expires_at).toISOString().slice(0,16);
+        } else {
+          document.getElementById('offerExpiresAt').value = '';
         }
         document.getElementById('offerModal').style.display = 'flex';
       }
@@ -178,34 +232,33 @@
       alert('Error loading offer: ' + e.message);
     }
   };
-  
+
+  /* ── toggle active ──────────────────────────────────────── */
   window.toggleOffer = async function(id, activate){
     try{
       const res = await fetch('/api/owner/offers/' + id, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' },
-        body: JSON.stringify({ is_active: activate })
+        method:  'PUT',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeader()),
+        body:    JSON.stringify({ is_active: activate })
       });
-      
       if(res.ok){
         loadOffers();
       } else {
-        alert('Failed to update offer');
+        alert('Failed to update offer status');
       }
     }catch(e){
       alert('Error: ' + e.message);
     }
   };
-  
+
+  /* ── delete ─────────────────────────────────────────────── */
   window.deleteOffer = async function(id){
     if(!confirm('Are you sure you want to delete this offer?')) return;
-    
     try{
       const res = await fetch('/api/owner/offers/' + id, {
-        method: 'DELETE',
-        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+        method:  'DELETE',
+        headers: authHeader()
       });
-      
       if(res.ok){
         loadOffers();
       } else {
@@ -215,9 +268,8 @@
       alert('Error: ' + e.message);
     }
   };
-  
+
   loadOffers();
 })();
 </script>
 {% endblock %}
-
