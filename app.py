@@ -8,7 +8,7 @@ import csv
 import random
 import string
 import uuid
-from sqlalchemy import func, desc, and_, or_
+from sqlalchemy import func, desc, and_, or_, case
 import os
 import json
 from dotenv import load_dotenv
@@ -134,6 +134,11 @@ def ist_date_filter(col):
     to today's IST date by casting the UTC time to IST first.
     Usage:  query.filter(ist_date_filter(Order.created_at) == ist_today())
     """
+    try:
+        if db.engine.name == 'sqlite':
+            return func.date(col, '+5 hours', '30 minutes')
+    except Exception:
+        pass
     return func.date(col + db.literal_column("interval '5 hours 30 minutes'"))
 
 def _resolve_image_url(raw: str) -> str:
@@ -2132,6 +2137,8 @@ def serialize_order(order: Order):
         'status': order.status,
         'timestamp': order.created_at.isoformat() if order.created_at else None,
         'created_at': order.created_at.isoformat() if order.created_at else None,  # Added for frontend
+        'preparation_started_at': order.preparation_started_at.isoformat() if order.preparation_started_at else None,
+        'preparation_completed_at': order.preparation_completed_at.isoformat() if order.preparation_completed_at else None,
         'customer_name': customer_name,  # Added for frontend
         'transaction_id': order.transaction_id or '',  # Added for frontend
         'is_vip': vip,
@@ -2657,23 +2664,39 @@ def owner_dashboard_stats():
         user = get_auth_user()
         if not user or user.role != 'owner':
             return jsonify({'error': 'Unauthorized'}), 401
-        # Use IST-aware dates so orders placed between 00:00–05:30 IST are counted correctly
-        today = ist_today()
+
+        # ── 60-second in-memory cache — avoids hitting Supabase on every load ──
+        import time as _t
+        _cache = getattr(owner_dashboard_stats, '_cache', None)
+        if _cache and (_t.time() - _cache['ts']) < 60:
+            return jsonify(_cache['data']), 200
+
+        today     = ist_today()
         yesterday = today - timedelta(days=1)
-        ist_col = ist_date_filter(Order.created_at)
-        # Include all orders (cash, online, delivered, accepted) - exclude only rejected/cancelled
-        today_rev = db.session.query(func.sum(Order.total_amount)).filter(
-            ist_col == today,
+        ist_col   = ist_date_filter(Order.created_at)
+
+        # ── Run revenue for today + yesterday in ONE query using CASE ──────────
+        rev_row = db.session.query(
+            func.sum(case(
+                (ist_col == today, Order.total_amount), else_=0
+            )).label('today_rev'),
+            func.sum(case(
+                (ist_col == yesterday, Order.total_amount), else_=0
+            )).label('yesterday_rev'),
+            func.count(case(
+                (and_(ist_col == today, Order.status.notin_(['rejected', 'cancelled'])), 1)
+            )).label('total_orders')
+        ).filter(
+            ist_col.in_([today, yesterday]),
             Order.status.notin_(['rejected', 'cancelled'])
-        ).scalar() or 0.0
-        yesterday_rev = db.session.query(func.sum(Order.total_amount)).filter(
-            ist_col == yesterday,
-            Order.status.notin_(['rejected', 'cancelled'])
-        ).scalar() or 0.0
-        total_orders = Order.query.filter(
-            ist_col == today,
-            Order.status.notin_(['rejected', 'cancelled'])
-        ).count()
+        ).first()
+
+        today_rev     = float(rev_row.today_rev or 0)
+        yesterday_rev = float(rev_row.yesterday_rev or 0)
+        total_orders  = int(rev_row.total_orders or 0)
+
+        # ── Avg rating ────────────────────────────────────────────────────────
+        avg_rating = None
         try:
             from models import Feedback
             today_fb = db.session.query(func.avg(Feedback.rating)).filter(
@@ -2681,17 +2704,38 @@ def owner_dashboard_stats():
             ).scalar()
             avg_rating = float(today_fb) if today_fb else None
         except Exception:
-            avg_rating = None
+            pass
+
+        # ── Top dish today ────────────────────────────────────────────────────
         top_dish_query = db.session.query(
-            MenuItem.name, MenuItem.icon, func.sum(OrderItem.quantity).label('qty')
+            MenuItem.name, MenuItem.icon,
+            func.sum(OrderItem.quantity).label('qty')
         ).join(OrderItem).join(Order).filter(
             ist_date_filter(Order.created_at) == today
         ).group_by(MenuItem.id).order_by(desc('qty')).first()
-        top_dish = top_dish_query.name if top_dish_query else '—'
+
+        top_dish      = top_dish_query.name if top_dish_query else '—'
         top_dish_icon = top_dish_query.icon if top_dish_query else ''
-        return jsonify({'today_revenue': float(today_rev), 'yesterday_revenue': float(yesterday_rev), 'total_orders': total_orders, 'avg_rating': avg_rating, 'top_dish': top_dish, 'top_dish_icon': top_dish_icon}), 200
+
+        data = {
+            'today_revenue':     today_rev,
+            'yesterday_revenue': yesterday_rev,
+            'total_orders':      total_orders,
+            'avg_rating':        avg_rating,
+            'top_dish':          top_dish,
+            'top_dish_icon':     top_dish_icon
+        }
+
+        # Store in cache
+        import time as _t2
+        owner_dashboard_stats._cache = {'ts': _t2.time(), 'data': data}
+
+        return jsonify(data), 200
+
     except Exception as e:
+        logger.error(f"[dashboard-stats] {e}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/owner/feedback', methods=['GET', 'OPTIONS'])
 def owner_get_feedback():
@@ -2791,7 +2835,8 @@ def owner_payment_status():
         user = get_auth_user()
         if not user or user.role != 'owner':
             return jsonify({'error': 'Unauthorized'}), 401
-        orders = Order.query.order_by(Order.created_at.desc()).limit(100).all()
+        limit = request.args.get('limit', default=100, type=int)
+        orders = Order.query.order_by(Order.created_at.desc()).limit(limit).all()
         result = []
         for o in orders:
             items_summary = ', '.join(
@@ -3732,6 +3777,7 @@ def owner_order_history():
         status_filter = request.args.get('status', '').strip()
         date_filter = request.args.get('date', '').strip()
         payment_filter = request.args.get('payment', '').strip()
+        limit = request.args.get('limit', default=1000, type=int)
         
         # Base query - all orders
         query = Order.query
@@ -3758,7 +3804,7 @@ def owner_order_history():
                 query = query.filter(or_(Order.transaction_id.in_(['', 'PENDING']), Order.transaction_id.is_(None)))
         
         # Order by most recent first
-        orders = query.order_by(Order.created_at.desc()).limit(1000).all()
+        orders = query.order_by(Order.created_at.desc()).limit(limit).all()
         
         # Serialize with additional payment info
         result = []

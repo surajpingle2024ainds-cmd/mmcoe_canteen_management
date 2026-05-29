@@ -119,7 +119,7 @@
     async function loadActivity() {
       const root = document.getElementById('d_activity');
       try {
-        const r = await authFetch('/api/owner/orders/payment-status');
+        const r = await authFetch('/api/owner/orders/payment-status?limit=5');
         if (!r.ok) {
           const error = await r.json().catch(() => ({ error: 'Failed to load activity' }));
           root.innerHTML = `<div style="color:#ef4444;">❌ ${r.status === 401 ? 'Session expired — please logout and login again' : (error.error || 'Failed to load activity')}</div>`;

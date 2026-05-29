@@ -4520,6 +4520,7 @@
     let activePortal = '';
     let cashTotal = 0;
     let cashItems = [];
+    window.transitioningOrders = {};
 
     // Staff PINs: any 4 digits = staff member authenticated
     const STAFF_PIN = '1234'; // Any 4-digit pin works for demo
@@ -5182,7 +5183,7 @@
 
         // Fetch recent orders + top dishes in parallel
         const [ordersRes, dishesRes] = await Promise.all([
-          fetch('/api/owner/orders/history?status=&date=', { headers: { 'Authorization': `Bearer ${gTok}` } }),
+          fetch('/api/owner/orders/history?status=&date=&limit=15', { headers: { 'Authorization': `Bearer ${gTok}` } }),
           fetch('/api/orders/analytics?date=' + new Date().toISOString().split('T')[0], { headers: { 'Authorization': `Bearer ${gTok}` } })
         ]);
 
@@ -5679,9 +5680,22 @@
       if (document.getElementById('dash-today-count')) document.getElementById('dash-today-count').textContent = (todayOrders || 0);
     }
 
-    function calculateTimeInfo(created_at, status) {
+    function calculateTimeInfo(order) {
       const now = new Date();
-      const _rawCt = created_at; const orderTime = _rawCt ? new Date(_rawCt.endsWith('Z') || _rawCt.includes('+') ? _rawCt : _rawCt + 'Z') : new Date();
+      const status = order.status;
+
+      // Select the correct starting timestamp for the constraint:
+      // - 'preparing': time since preparation started
+      // - 'ready': time since preparation completed
+      // - 'accepted'/'pending': time since order creation
+      let refTimeStr = order.created_at;
+      if (status === 'preparing' && order.preparation_started_at) {
+        refTimeStr = order.preparation_started_at;
+      } else if (status === 'ready' && order.preparation_completed_at) {
+        refTimeStr = order.preparation_completed_at;
+      }
+
+      const orderTime = refTimeStr ? new Date(refTimeStr.endsWith('Z') || refTimeStr.includes('+') ? refTimeStr : refTimeStr + 'Z') : new Date();
       const diffMins = Math.floor((now - orderTime) / 60000);
 
       let timeClass = '';
@@ -5738,29 +5752,34 @@
         ['accepted', 'preparing', 'ready'].forEach(s => stackCounts[s] = {});
 
         liveOrders.forEach(o => {
-          if (o.status === 'pending' || o.status === 'delivered' || o.status === 'rejected') return;
+          let status = o.status;
+          if (window.transitioningOrders && window.transitioningOrders[o.db_id]) {
+            status = window.transitioningOrders[o.db_id];
+          }
+          if (status === 'pending' || status === 'delivered' || status === 'rejected') return;
 
-          const ti = calculateTimeInfo(o.created_at, o.status);
+          const oCloned = Object.assign({}, o, { status: status });
+          const ti = calculateTimeInfo(oCloned);
           let itemsHtml = '';
-          (o.items || []).forEach(it => {
+          (oCloned.items || []).forEach(it => {
             itemsHtml += `<div class="ticket-item-row"><span>${it.name}</span><span class="ticket-item-qty">× ${it.quantity}</span></div>`;
-            if (!stackCounts[o.status][it.name]) stackCounts[o.status][it.name] = { count: 0, orders: new Set() };
-            stackCounts[o.status][it.name].count += it.quantity;
-            stackCounts[o.status][it.name].orders.add(o.db_id);
+            if (!stackCounts[status][it.name]) stackCounts[status][it.name] = { count: 0, orders: new Set() };
+            stackCounts[status][it.name].count += it.quantity;
+            stackCounts[status][it.name].orders.add(oCloned.db_id);
           });
 
           let stageDash = ''; let stageDashColor = '';
-          if (o.status === 'accepted') { stageDash = 'Received'; stageDashColor = 'stage-received'; receivedCount++; }
-          if (o.status === 'preparing') { stageDash = 'In Process'; stageDashColor = 'stage-process'; processCount++; }
-          if (o.status === 'ready') { stageDash = 'Ready'; stageDashColor = 'stage-done'; doneCount++; }
+          if (status === 'accepted') { stageDash = 'Received'; stageDashColor = 'stage-received'; receivedCount++; }
+          if (status === 'preparing') { stageDash = 'In Process'; stageDashColor = 'stage-process'; processCount++; }
+          if (status === 'ready') { stageDash = 'Ready'; stageDashColor = 'stage-done'; doneCount++; }
 
           let timeDashClass = '';
-          if (ti.isStale && o.status === 'ready') timeDashClass = 'crit';
+          if (ti.isStale && status === 'ready') timeDashClass = 'crit';
           else if (ti.isStale) timeDashClass = 'warn';
 
           htmlDashQueue += `
           <div class="k-queue-row">
-            <span class="k-queue-items" style="font-weight:700;color:var(--accent-${o.status === 'accepted' ? 'purple' : o.status === 'preparing' ? 'orange' : 'green'})">${(o.items || []).map(i => i.name + ' × ' + i.quantity).join(', ')}</span>
+            <span class="k-queue-items" style="font-weight:700;color:var(--accent-${status === 'accepted' ? 'purple' : status === 'preparing' ? 'orange' : 'green'})">${(oCloned.items || []).map(i => i.name + ' × ' + i.quantity).join(', ')}</span>
             <span class="k-queue-stage ${stageDashColor}">${stageDash}</span>
             <span class="k-queue-time ${timeDashClass}">${ti.diffMins}m${ti.isStale ? ' !' : ''}</span>
           </div>
@@ -5769,18 +5788,18 @@
           let overBadge = ti.badgeText ? `<div class="overtime-badge ${ti.badgeClass}">${ti.badgeText}</div>` : '';
           let kanbanAction = '';
 
-          if (o.status === 'accepted') {
-            kanbanAction = `<button class="ticket-action action-assign" onclick="advanceOrder(this, ${o.db_id}, 'preparing')"><span class="material-symbols-outlined">arrow_forward</span>Assign to Chef</button>`;
-          } else if (o.status === 'preparing') {
-            kanbanAction = `<button class="ticket-action action-ready" onclick="advanceOrder(this, ${o.db_id}, 'ready')"><span class="material-symbols-outlined">check</span>Mark Ready for Pickup</button>`;
-          } else if (o.status === 'ready') {
-            kanbanAction = `<button class="ticket-action action-done" onclick="markDelivered(this, '${String(o.order_id).replace(/'/g, "\\'")}')"><span class="material-symbols-outlined">local_shipping</span>Mark as Delivered</button>`;
+          if (status === 'accepted') {
+            kanbanAction = `<button class="ticket-action action-assign" onclick="advanceOrder(this, ${oCloned.db_id}, 'preparing')"><span class="material-symbols-outlined">arrow_forward</span>Assign to Chef</button>`;
+          } else if (status === 'preparing') {
+            kanbanAction = `<button class="ticket-action action-ready" onclick="advanceOrder(this, ${oCloned.db_id}, 'ready')"><span class="material-symbols-outlined">check</span>Mark Ready for Pickup</button>`;
+          } else if (status === 'ready') {
+            kanbanAction = `<button class="ticket-action action-done" onclick="markDelivered(this, '${String(oCloned.order_id).replace(/'/g, "\\'")}')"><span class="material-symbols-outlined">local_shipping</span>Mark as Delivered</button>`;
           }
 
           let cardHtml = `
-          <div class="k-ticket ${ti.cardWarnClass}" data-arrived="${ti.diffMins}" data-stage="${o.status}">
+          <div class="k-ticket ${ti.cardWarnClass}" data-arrived="${ti.diffMins}" data-stage="${status}">
             <div class="ticket-top">
-              <span class="ticket-id">${(o.items || []).map(i => `${i.name} ×${i.quantity}`).join(', ')}</span>
+              <span class="ticket-id">${(oCloned.items || []).map(i => `${i.name} ×${i.quantity}`).join(', ')}</span>
               <span class="ticket-time-ago">${ti.diffMins}m ago</span>
             </div>
             ${overBadge}
@@ -5789,20 +5808,20 @@
           </div>
         `;
 
-          if (o.status === 'accepted') htmlReceived += cardHtml;
-          if (o.status === 'preparing') htmlProcess += cardHtml;
-          if (o.status === 'ready') {
+          if (status === 'accepted') htmlReceived += cardHtml;
+          if (status === 'preparing') htmlProcess += cardHtml;
+          if (status === 'ready') {
             htmlDone += cardHtml;
             htmlHandoff += `
             <div class="ready-order-card ${ti.isStale ? 'overtime-pickup' : ''}">
               <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0;">
                 <div class="ready-order-info">
-                  <div class="ready-order-name">${o.customer_name || 'Guest'}</div>
-                  <div class="ready-order-items" style="font-weight:700;font-size:13px">${(o.items || []).map(i => `${i.icon || ''}${i.name} ×${i.quantity}`).join(' · ')}</div>
+                  <div class="ready-order-name">${oCloned.customer_name || 'Guest'}</div>
+                  <div class="ready-order-items" style="font-weight:700;font-size:13px">${(oCloned.items || []).map(i => `${i.icon || ''}${i.name} ×${i.quantity}`).join(' · ')}</div>
                   <div style="margin-top:4px"><span class="ready-order-wait ${ti.isStale ? 'wait-late' : 'wait-ok'}">${ti.diffMins}m waiting</span></div>
                 </div>
               </div>
-              <button class="tap-deliver-btn ${ti.isStale ? 'tap-deliver-late' : ''}" onclick="markDelivered(this, '${String(o.order_id).replace(/'/g, "\\'")}')">
+              <button class="tap-deliver-btn ${ti.isStale ? 'tap-deliver-late' : ''}" onclick="markDelivered(this, '${String(oCloned.order_id).replace(/'/g, "\\'")}')">
                 <span class="material-symbols-outlined" style="font-size:22px">check_circle</span>
                 <span>Deliver</span>
               </button>
@@ -5850,28 +5869,39 @@
         // ---- Compact table view ----
         const compactTbody = document.getElementById('compact-tbody');
         if (compactTbody) {
-          const activeOrders = liveOrders.filter(o => !['pending', 'delivered', 'rejected'].includes(o.status));
+          const activeOrders = liveOrders.filter(o => {
+            let status = o.status;
+            if (window.transitioningOrders && window.transitioningOrders[o.db_id]) {
+              status = window.transitioningOrders[o.db_id];
+            }
+            return !['pending', 'delivered', 'rejected'].includes(status);
+          });
           if (!activeOrders.length) {
             compactTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">No active orders</td></tr>';
           } else {
             compactTbody.innerHTML = activeOrders.map(o => {
-              const ti = calculateTimeInfo(o.created_at, o.status);
-              const timeClass = ti.isStale && o.status === 'ready' ? 'crit' : ti.isStale ? 'warn' : '';
-              const chipClass = o.status === 'accepted' ? 'c-chip-accepted' : o.status === 'preparing' ? 'c-chip-preparing' : 'c-chip-ready';
-              const idClass = 's-' + o.status;
-              const itemsTxt = (o.items || []).map(i => `${i.icon || ''}${i.name} ×${i.quantity}`).join(', ');
+              let status = o.status;
+              if (window.transitioningOrders && window.transitioningOrders[o.db_id]) {
+                status = window.transitioningOrders[o.db_id];
+              }
+              const oCloned = Object.assign({}, o, { status: status });
+              const ti = calculateTimeInfo(oCloned);
+              const timeClass = ti.isStale && status === 'ready' ? 'crit' : ti.isStale ? 'warn' : '';
+              const chipClass = status === 'accepted' ? 'c-chip-accepted' : status === 'preparing' ? 'c-chip-preparing' : 'c-chip-ready';
+              const idClass = 's-' + status;
+              const itemsTxt = (oCloned.items || []).map(i => `${i.icon || ''}${i.name} ×${i.quantity}`).join(', ');
               let actionHtml = '';
-              if (o.status === 'accepted') {
-                actionHtml = `<button class="compact-action ca-assign" onclick="advanceOrder(this,${o.db_id},'preparing')"><span class="material-symbols-outlined">arrow_forward</span>Assign</button>`;
-              } else if (o.status === 'preparing') {
-                actionHtml = `<button class="compact-action ca-ready" onclick="advanceOrder(this,${o.db_id},'ready')"><span class="material-symbols-outlined">check</span>Mark Ready</button>`;
-              } else if (o.status === 'ready') {
-                actionHtml = `<button class="compact-action ca-deliver" onclick="markDelivered(this,'${String(o.order_id).replace(/'/g, "\\'")}')"><span class="material-symbols-outlined">local_shipping</span>Deliver</button>`;
+              if (status === 'accepted') {
+                actionHtml = `<button class="compact-action ca-assign" onclick="advanceOrder(this,${oCloned.db_id},'preparing')"><span class="material-symbols-outlined">arrow_forward</span>Assign</button>`;
+              } else if (status === 'preparing') {
+                actionHtml = `<button class="compact-action ca-ready" onclick="advanceOrder(this,${oCloned.db_id},'ready')"><span class="material-symbols-outlined">check</span>Mark Ready</button>`;
+              } else if (status === 'ready') {
+                actionHtml = `<button class="compact-action ca-deliver" onclick="markDelivered(this,'${String(oCloned.order_id).replace(/'/g, "\\'")}')"><span class="material-symbols-outlined">local_shipping</span>Deliver</button>`;
               }
               return `<tr>
-              <td><span class="compact-chip ${chipClass}">${o.status}</span></td>
+              <td><span class="compact-chip ${chipClass}">${status}</span></td>
               <td class="compact-items">${itemsTxt}</td>
-              <td style="font-size:12px;color:var(--text-muted)">${o.customer_name || 'Guest'}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${oCloned.customer_name || 'Guest'}</td>
               <td><span class="compact-time ${timeClass}">${ti.diffMins}m${ti.isStale ? ' ⚠' : ''}</span></td>
               <td>${actionHtml}</td>
             </tr>`;
@@ -5882,16 +5912,60 @@
         // ---- New order detection ----
         checkNewOrders(liveOrders);
 
-        // Fetch today's total order count (all statuses, not just live)
+        // Fetch today's total order count and calculate hourly output dynamically
         let todayTotal = liveOrders.length; // fallback
+        const hourlyCounts = { 9: 0, 10: 0, 11: 0, 12: 0, 13: 0, 14: 0, 15: 0, 16: 0 };
         try {
           const todayStr = new Date().toISOString().split('T')[0];
           const histRes = await fetch(`/api/kitchen/orders/history?date=${todayStr}`, { headers: { 'Authorization': `Bearer ${gTok}` } });
           if (histRes.ok) {
             const histData = await histRes.json();
-            todayTotal = Array.isArray(histData) ? histData.filter(o => !['rejected', 'cancelled'].includes(o.status)).length : liveOrders.length;
+            if (Array.isArray(histData)) {
+              const activeHist = histData.filter(o => !['rejected', 'cancelled'].includes(o.status));
+              todayTotal = activeHist.length;
+
+              activeHist.forEach(o => {
+                if (o.status === 'ready' || o.status === 'delivered') {
+                  const rawTime = o.preparation_completed_at || o.timestamp || o.created_at;
+                  if (rawTime) {
+                    const d = new Date(rawTime.endsWith('Z') || rawTime.includes('+') ? rawTime : rawTime + 'Z');
+                    const hr = d.getHours();
+                    if (hr >= 9 && hr <= 16) {
+                      hourlyCounts[hr]++;
+                    }
+                  }
+                }
+              });
+            }
           }
         } catch (_) { }
+
+        // Update Hourly Output UI chart dynamically
+        const curHour = new Date().getHours();
+        const hoursList = [9, 10, 11, 12, 13, 14, 15, 16];
+        const maxVal = Math.max(5, ...Object.values(hourlyCounts));
+        
+        let chartHtml = '';
+        hoursList.forEach(hr => {
+          const count = hourlyCounts[hr] || 0;
+          const pct = (count / maxVal) * 100;
+          const isNow = hr === curHour;
+          chartHtml += `<div class="k-bar ${isNow ? 'now' : ''}" style="height:${pct}%" title="${count} order(s) completed"></div>`;
+        });
+        
+        const chartContainer = document.querySelector('.k-bar-chart');
+        if (chartContainer) chartContainer.innerHTML = chartHtml;
+
+        let labelsHtml = '';
+        const labels = { 9: '9AM', 10: '10AM', 11: '11AM', 12: '12PM', 13: '1PM', 14: '2PM', 15: '3PM', 16: '4PM' };
+        hoursList.forEach(hr => {
+          const isNow = hr === curHour;
+          const txt = isNow ? 'NOW' : labels[hr];
+          labelsHtml += `<div class="k-bar-label ${isNow ? 'now-label' : ''}" style="${isNow ? 'font-weight:900;color:var(--accent-purple)' : ''}">${txt}</div>`;
+        });
+        
+        const labelsContainer = document.querySelector('.k-bar-labels');
+        if (labelsContainer) labelsContainer.innerHTML = labelsHtml;
 
         updatePipelineCounts(receivedCount, processCount, doneCount, todayTotal);
 
@@ -5899,8 +5973,12 @@
     }
 
     async function advanceOrder(btn, dbId, newStatus) {
-      const ticket = btn.closest('.k-ticket') || btn.closest('tr');
+      const ticket = btn.closest('.k-ticket') || btn.closest('tr') || btn.closest('.ready-order-card');
       const restore = btnBusy(btn);
+
+      // Register optimistic state override
+      window.transitioningOrders = window.transitioningOrders || {};
+      window.transitioningOrders[dbId] = newStatus;
 
       try {
         const gTok = localStorage.getItem('authToken');
@@ -5911,25 +5989,46 @@
         });
         if (res.ok) {
           showKToast(newStatus === 'preparing' ? 'Assigned to chef! 👨‍🍳' : 'Ready for pickup! 🎉', newStatus === 'preparing' ? '#c799ff' : '#5fc882');
-          if (ticket && ticket.classList.contains('k-ticket')) {
+          if (ticket && (ticket.classList.contains('k-ticket') || ticket.classList.contains('ready-order-card'))) {
             ticket.style.maxHeight = ticket.offsetHeight + 'px';
             ticket.classList.add('k-ticket-removing');
             requestAnimationFrame(() => requestAnimationFrame(() => {
               ticket.classList.add('collapsed');
-              setTimeout(() => loadKitchen(), 600);
+              setTimeout(() => {
+                delete window.transitioningOrders[dbId];
+                loadKitchen();
+              }, 600);
             }));
           } else {
-            setTimeout(() => loadKitchen(), 300);
+            setTimeout(() => {
+              delete window.transitioningOrders[dbId];
+              loadKitchen();
+            }, 300);
           }
         } else {
+          delete window.transitioningOrders[dbId];
           restore();
         }
-      } catch (e) { restore(); }
+      } catch (e) {
+        delete window.transitioningOrders[dbId];
+        restore();
+      }
     }
 
     async function markDelivered(btn, orderCodeStr) {
       const code = String(orderCodeStr).replace('#', '').trim();
       if (!code) return;
+
+      let dbId = null;
+      if (window.lastKitchenOrders) {
+        const found = window.lastKitchenOrders.find(o => String(o.order_id) === String(code));
+        if (found) dbId = found.db_id;
+      }
+
+      if (dbId) {
+        window.transitioningOrders = window.transitioningOrders || {};
+        window.transitioningOrders[dbId] = 'delivered';
+      }
 
       let btnParent = null;
       if (btn) {
@@ -5958,11 +6057,16 @@
             item.innerHTML = `<span class="material-symbols-outlined">check_circle</span><span style="font-weight:700">#${code}</span><span style="color:var(--text-muted)">Marked as delivered</span><span class="delivery-log-time">${nowTime}</span>`;
             log.insertBefore(item, log.firstChild);
           }
-          setTimeout(() => loadKitchen(), 650);
+          setTimeout(() => {
+            if (dbId) delete window.transitioningOrders[dbId];
+            loadKitchen();
+          }, 650);
         } else {
+          if (dbId) delete window.transitioningOrders[dbId];
           if (btnParent) { btnParent.classList.remove('k-ticket-removing', 'collapsed'); btnParent.style.maxHeight = ''; }
         }
       } catch (e) {
+        if (dbId) delete window.transitioningOrders[dbId];
         if (btnParent) { btnParent.classList.remove('k-ticket-removing', 'collapsed'); btnParent.style.maxHeight = ''; }
       }
     }
@@ -6057,6 +6161,14 @@
     setInterval(() => {
       if (activePortal === 'kitchen') loadKitchen();
     }, 30000);
+
+    // Dynamic auto-refresh for manager dashboard stats and ratings every 15 seconds
+    setInterval(() => {
+      const dashboardSection = document.getElementById('section-dashboard');
+      if (dashboardSection && dashboardSection.classList.contains('active')) {
+        loadDashboard();
+      }
+    }, 15000);
 
     // =============================
     // AI ASSISTANT CHAT
