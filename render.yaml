@@ -1,0 +1,43 @@
+# =============================================================================
+# render.yaml — Render Blueprint
+# Render reads this file and auto-configures the web service.
+# Docs: https://render.com/docs/blueprint-spec
+# =============================================================================
+
+services:
+  - type: web
+    name: essen-canteen
+    runtime: docker          # use the Dockerfile in this repo
+    dockerfilePath: ./Dockerfile
+    region: singapore        # closest to India (Mumbai not available on free tier)
+    plan: free
+    healthCheckPath: /health
+
+    # ── Environment variables ──────────────────────────────────────────────
+    # Values marked sync:false must be set manually in the Render dashboard.
+    # Values with a hardcoded `value:` are safe to commit.
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: FIREBASE_CREDENTIALS_PATH
+        value: ./firebase-credentials.json
+      - key: FIREBASE_SKIP_VERIFY
+        value: "false"
+
+      # ── Set these manually in Render dashboard → Environment ──────────────
+      - key: DATABASE_URL
+        sync: false          # postgresql://...?sslmode=require
+      - key: SECRET_KEY
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: OWNER_COLLEGE_ID
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false
+      - key: KITCHEN_COLLEGE_ID
+        sync: false
+      - key: KITCHEN_PASSWORD
+        sync: false

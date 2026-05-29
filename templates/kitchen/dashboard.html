@@ -54,29 +54,38 @@
 </div>
 <script>
   (function () {
-    // Debug: Check which token exists
-    console.log('Token Debug: authToken=', localStorage.getItem('authToken'));
-    console.log('Token Debug: token=', localStorage.getItem('token'));
-
-    // Try both keys to be safe
-    const token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+    // Read token from localStorage (both keys) OR from cookie (set by server on login)
+    function getCookieToken() {
+      const match = document.cookie.split('; ').find(r => r.startsWith('authToken='));
+      return match ? match.split('=')[1] : '';
+    }
+    const token = localStorage.getItem('authToken') || localStorage.getItem('token') || getCookieToken() || '';
 
     function badge(s) { s = (s || '').toLowerCase(); if (s === 'pending') return 'badge pending'; if (s === 'accepted') return 'badge accepted'; if (s === 'preparing') return 'badge preparing'; if (s === 'ready') return 'badge ready'; if (s === 'delivered') return 'badge delivered'; return 'badge'; }
+
+    async function loadStats() {
+      try {
+        const r = await fetch('/api/kitchen/stats', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
+        if (!r.ok) return;
+        const s = await r.json();
+        document.getElementById('k_queue').textContent = String(s.in_queue ?? '—');
+        document.getElementById('k_done').textContent = String(s.completed_today ?? '—');
+        document.getElementById('k_avg').textContent = s.avg_prep_minutes != null ? s.avg_prep_minutes + ' min' : '—';
+      } catch (e) { console.warn('Stats load failed', e); }
+    }
+
     async function load() {
       try {
         const r = await fetch('/api/kitchen/orders/live', { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
         let list = await r.json(); if (!Array.isArray(list)) list = [];
-        const queue = list.filter(o => ['pending', 'accepted', 'preparing'].includes(String(o.status || '').toLowerCase())).length;
-        const ready = list.filter(o => String(o.status || '').toLowerCase() === 'ready').length;
-        document.getElementById('k_queue').textContent = String(queue);
-        document.getElementById('k_done').textContent = String(ready);
-        document.getElementById('k_avg').textContent = '--';
         const tbody = document.getElementById('k_rows');
         if (!list.length) { tbody.colSpan = 3; tbody.textContent = 'No live orders.'; return; }
         tbody.parentElement.innerHTML = list.slice(0, 8).map(o => `<tr><td>#${o.id}</td><td>${(o.items || []).map(i => `${i.icon || ''} ${i.name} x${i.quantity}`).join('<br>')}</td><td><span class='${badge(o.status)}'>${String(o.status || '').toUpperCase()}</span></td></tr>`).join('');
       } catch (e) { var el = document.getElementById('k_rows'); if (el) el.textContent = 'Failed to load.'; }
     }
-    load(); setInterval(load, 8000);
+    load(); loadStats();
+    setInterval(load, 8000);
+    setInterval(loadStats, 10000);
 
     // Initialize voice announcement for new orders
     if (typeof window.waitForVoiceAssistant === 'function') {

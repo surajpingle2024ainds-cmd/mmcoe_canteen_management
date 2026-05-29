@@ -2,45 +2,47 @@
 {% block title %}Top Dishes{% endblock %}
 {% block content %}
 <div class="card">
-    <h2 class="section-title">🏆 Top Dishes</h2>
-    <div id="topRoot">Loading...</div>
+  <h2 class="section-title">🏆 Top Dishes</h2>
+  <div id="topRoot">Loading...</div>
 </div>
 <script>
-(async function(){
-  const token = localStorage.getItem('authToken') || '';
-  const root = document.getElementById('topRoot');
-  
-  if(!token){
-    root.innerHTML = '<div style="color:#ef4444;padding:20px;text-align:center;">❌ Not logged in. Please <a href="/">login</a> first.</div>';
-    return;
-  }
-  
-  try {
-    const date = new Date().toISOString().split('T')[0];
-    const res = await fetch(`/api/orders/analytics?date=${date}`, { headers: { 'Authorization': 'Bearer ' + token } });
-    
-    if(!res.ok){
-      const error = await res.json().catch(() => ({error: 'Failed to load'}));
-      if(res.status === 401 || res.status === 403){
-        root.innerHTML = '<div style="color:#ef4444;padding:20px;text-align:center;">❌ Unauthorized. Please logout and login again as owner.<br><a href="/" class="btn" style="margin-top:12px;display:inline-block;">Go to Login</a></div>';
-      } else {
-        root.innerHTML = '<div style="color:#ef4444;padding:20px;">❌ Error: ' + (error.error || 'Failed to load') + '</div>';
-      }
+  (async function () {
+    function getCookieToken() {
+      const m = document.cookie.split('; ').find(r => r.startsWith('authToken='));
+      return m ? decodeURIComponent(m.split('=')[1]) : '';
+    }
+    const token = localStorage.getItem('authToken') || localStorage.getItem('token') || getCookieToken() || '';
+    const root = document.getElementById('topRoot');
+
+    if (!token) {
+      root.innerHTML = '<div style="color:#ef4444;padding:20px;text-align:center;">❌ Not logged in. Please <a href="/">login</a> first.</div>';
       return;
     }
-    
-    const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) { 
-      root.textContent = 'No data available for today.'; 
-      return; 
+
+    try {
+      const date = new Date().toISOString().split('T')[0];
+      const res = await fetch(`/api/orders/analytics?date=${date}`, { headers: { 'Authorization': 'Bearer ' + token } });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Failed to load' }));
+        if (res.status === 401 || res.status === 403) {
+          root.innerHTML = '<div style="color:#ef4444;padding:20px;text-align:center;">❌ Unauthorized. Please logout and login again as owner.<br><a href="/" class="btn" style="margin-top:12px;display:inline-block;">Go to Login</a></div>';
+        } else {
+          root.innerHTML = '<div style="color:#ef4444;padding:20px;">❌ Error: ' + (error.error || 'Failed to load') + '</div>';
+        }
+        return;
+      }
+
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        root.textContent = 'No data available for today.';
+        return;
+      }
+      root.innerHTML = data.map(x => `<div style="padding:8px 0;border-bottom:1px solid #eee;"><span style="font-size:20px">${x.icon || ''}</span> <strong>${x.name}</strong> — Qty: ${x.quantity}, Revenue: ₹${Math.round(x.revenue)}</div>`).join('');
+    } catch (e) {
+      root.innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load: ' + e.message + '</div>';
+      console.error(e);
     }
-    root.innerHTML = data.map(x => `<div style="padding:8px 0;border-bottom:1px solid #eee;"><span style="font-size:20px">${x.icon||''}</span> <strong>${x.name}</strong> — Qty: ${x.quantity}, Revenue: ₹${Math.round(x.revenue)}</div>`).join('');
-  } catch(e) {
-    root.innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load: ' + e.message + '</div>';
-    console.error(e);
-  }
-})();
+  })();
 </script>
 {% endblock %}
-
-

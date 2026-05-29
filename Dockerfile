@@ -23,7 +23,9 @@ ENV PORT=10000
 # DEPENDENCIES
 # =============================================================================
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Upgrade pip first, then install pinned deps
+RUN pip install --upgrade pip --no-cache-dir \
+ && pip install --no-cache-dir -r requirements.txt
 
 # =============================================================================
 # APP FILES
@@ -36,8 +38,16 @@ COPY . .
 EXPOSE $PORT
 
 # =============================================================================
+# HEALTH CHECK — Docker/Render restarts container if /health stops responding
+# interval: how often to check · timeout: max response wait · retries: before unhealthy
+# =============================================================================
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-10000}/health')" || exit 1
+
+# =============================================================================
 # START — gunicorn binds to whatever port Render assigns via $PORT
 # Workers: 2 is safe for Render free tier (512MB RAM)
 # Timeout: 120s for slow cold starts on free tier
+# preload: saves memory by loading app code once before forking workers
 # =============================================================================
-CMD gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --log-level warning app:app
+CMD gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --log-level warning --preload app:app

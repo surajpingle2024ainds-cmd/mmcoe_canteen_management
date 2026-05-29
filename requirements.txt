@@ -26,5 +26,5 @@ firebase-admin>=6.0.0
 # Supabase Storage — persistent image hosting (replaces ephemeral local disk)
 supabase>=2.4.0
 
-# Production server
-gunicorn>=22.0.0
+# Production server (used locally and on Render — not needed on Vercel)
+# gunicorn>=22.0.0

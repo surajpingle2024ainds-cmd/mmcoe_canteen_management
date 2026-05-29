@@ -73,22 +73,30 @@ _firebase_project_id = os.environ.get('FIREBASE_PROJECT_ID', '')
 _skip_verify         = os.environ.get('FIREBASE_SKIP_VERIFY', 'false').lower() == 'true'
 _firebase_admin_ok   = False
 
-if os.path.exists(_firebase_creds_path):
-    try:
+# ── Firebase init: try env var JSON first (Vercel/Render), then file path (local dev) ──
+_firebase_creds_json = os.environ.get('FIREBASE_CREDENTIALS_JSON', '')
+
+try:
+    if _firebase_creds_json:
+        # Env var contains the full JSON string (paste firebase-credentials.json content here)
+        _cred_dict = json.loads(_firebase_creds_json)
+        _cred = credentials.Certificate(_cred_dict)
+        firebase_admin.initialize_app(_cred)
+        _firebase_admin_ok = True
+        logger.info("[FIREBASE] Admin SDK initialized from env var")
+    elif os.path.exists(_firebase_creds_path):
         _cred = credentials.Certificate(_firebase_creds_path)
         firebase_admin.initialize_app(_cred)
         _firebase_admin_ok = True
-        logger.info("[FIREBASE] Admin SDK initialized")
-    except Exception as e:
-        logger.warning(f"[FIREBASE] Credentials file invalid: {e}")
-        
+        logger.info("[FIREBASE] Admin SDK initialized from file")
+    else:
+        logger.warning("[FIREBASE] No credentials found — Firebase token verification disabled")
         try:
             firebase_admin.initialize_app()
         except Exception:
             pass
-else:
-    logger.warning("[FIREBASE] firebase-credentials.json not found")
-    
+except Exception as e:
+    logger.warning(f"[FIREBASE] Init failed: {e}")
     try:
         firebase_admin.initialize_app()
     except Exception:
@@ -97,11 +105,36 @@ else:
 if _skip_verify:
     logger.warning("[FIREBASE] FIREBASE_SKIP_VERIFY=true — dev only, disable in production")
 
+
 import base64 as _base64
 import time as _time
 
 
 BASE_URL = 'https://essen-backend-uml5.onrender.com'
+
+# =============================================================================
+# IST TIMEZONE HELPER
+# Supabase stores timestamps as UTC. India is UTC+5:30, so date.today() on the
+# server returns the wrong date for any time between 00:00–05:30 IST.
+# Use ist_today() everywhere instead of date.today() for IST-aware queries.
+# =============================================================================
+_IST_OFFSET = timedelta(hours=5, minutes=30)
+
+def ist_now() -> datetime:
+    """Current datetime in IST."""
+    return datetime.utcnow() + _IST_OFFSET
+
+def ist_today() -> date:
+    """Today's date in IST (not UTC)."""
+    return ist_now().date()
+
+def ist_date_filter(col):
+    """
+    SQLAlchemy filter expression that compares a UTC-stored timestamp column
+    to today's IST date by casting the UTC time to IST first.
+    Usage:  query.filter(ist_date_filter(Order.created_at) == ist_today())
+    """
+    return func.date(col + db.literal_column("interval '5 hours 30 minutes'"))
 
 def _resolve_image_url(raw: str) -> str:
     """
@@ -189,9 +222,14 @@ def add_security_headers(response):
     csp = (
         "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: "
         "https://*.google.com https://*.googleapis.com https://*.gstatic.com "
-        "https://api.qrserver.com https://cdnjs.cloudflare.com https://actions.google.com;"
-        "img-src 'self' data: blob: https://*.google.com https://api.qrserver.com;"
-        "media-src 'self' https://actions.google.com;"
+        "https://*.googleusercontent.com "
+        "https://api.qrserver.com https://cdnjs.cloudflare.com https://actions.google.com; "
+        "img-src 'self' data: blob: https://*.google.com https://*.googleapis.com "
+        "https://*.googleusercontent.com https://api.qrserver.com "
+        "https://*.supabase.co; "
+        "media-src 'self' https://actions.google.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
     )
     response.headers['Content-Security-Policy'] = csp
     return response
@@ -280,11 +318,16 @@ def get_auth_user():
                           → looks up user by id
     """
     try:
+        # Priority 1: Authorization header (Flutter app + JS fetch with explicit header)
         auth_header = request.headers.get('Authorization', '')
-        if not auth_header.startswith('Bearer '):
-            return None
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:].strip()
+        else:
+            # Priority 2: authToken cookie — browser staff portal sets this on login
+            # JS fetch() does NOT send cookies unless credentials:'include' is set,
+            # so we also let JS pass it via header. But page-load requests use cookie.
+            token = request.cookies.get('authToken', '').strip()
 
-        token = auth_header[7:].strip()
         if not token:
             return None
 
@@ -386,7 +429,7 @@ def login_customer():
 
 @app.route('/login/staff', methods=['GET'])
 def login_staff():
-    return render_template('login_staff.html')
+    return render_template('staff_unified.html')
 
 @app.route('/api/auth/generate-otp', methods=['POST', 'OPTIONS'])
 def api_generate_otp():
@@ -1336,7 +1379,8 @@ def create_order():
             customer_phone=user.phone,
             total_amount=calculated_total,
             transaction_id=transaction_id,
-            status='pending'
+            status='pending',
+            created_at=datetime.utcnow()
         )
         
         db.session.add(order)
@@ -2613,28 +2657,36 @@ def owner_dashboard_stats():
         user = get_auth_user()
         if not user or user.role != 'owner':
             return jsonify({'error': 'Unauthorized'}), 401
-        today = date.today()
+        # Use IST-aware dates so orders placed between 00:00–05:30 IST are counted correctly
+        today = ist_today()
         yesterday = today - timedelta(days=1)
+        ist_col = ist_date_filter(Order.created_at)
         # Include all orders (cash, online, delivered, accepted) - exclude only rejected/cancelled
         today_rev = db.session.query(func.sum(Order.total_amount)).filter(
-            func.date(Order.created_at)==today,
+            ist_col == today,
             Order.status.notin_(['rejected', 'cancelled'])
         ).scalar() or 0.0
         yesterday_rev = db.session.query(func.sum(Order.total_amount)).filter(
-            func.date(Order.created_at)==yesterday,
+            ist_col == yesterday,
             Order.status.notin_(['rejected', 'cancelled'])
         ).scalar() or 0.0
         total_orders = Order.query.filter(
-            func.date(Order.created_at)==today,
+            ist_col == today,
             Order.status.notin_(['rejected', 'cancelled'])
         ).count()
         try:
             from models import Feedback
-            today_fb = db.session.query(func.avg(Feedback.rating)).filter(func.date(Feedback.created_at)==today).scalar()
+            today_fb = db.session.query(func.avg(Feedback.rating)).filter(
+                ist_date_filter(Feedback.created_at) == today
+            ).scalar()
             avg_rating = float(today_fb) if today_fb else None
         except Exception:
             avg_rating = None
-        top_dish_query = db.session.query(MenuItem.name, MenuItem.icon, func.sum(OrderItem.quantity).label('qty')).join(OrderItem).join(Order).filter(func.date(Order.created_at)==today).group_by(MenuItem.id).order_by(desc('qty')).first()
+        top_dish_query = db.session.query(
+            MenuItem.name, MenuItem.icon, func.sum(OrderItem.quantity).label('qty')
+        ).join(OrderItem).join(Order).filter(
+            ist_date_filter(Order.created_at) == today
+        ).group_by(MenuItem.id).order_by(desc('qty')).first()
         top_dish = top_dish_query.name if top_dish_query else '—'
         top_dish_icon = top_dish_query.icon if top_dish_query else ''
         return jsonify({'today_revenue': float(today_rev), 'yesterday_revenue': float(yesterday_rev), 'total_orders': total_orders, 'avg_rating': avg_rating, 'top_dish': top_dish, 'top_dish_icon': top_dish_icon}), 200
@@ -2655,6 +2707,82 @@ def owner_get_feedback():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/owner/staff', methods=['GET', 'OPTIONS'])
+def owner_get_staff():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        from models import User
+        staff_members = User.query.filter(User.role.in_(['kitchen', 'owner', 'staff'])).order_by(User.role, User.name).all()
+        return jsonify([{'id': s.id, 'name': s.name, 'role': s.role, 'is_blocked': s.is_blocked} for s in staff_members]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/owner/alerts', methods=['GET', 'OPTIONS'])
+def owner_get_alerts():
+    """Return operational alerts: low-stock inventory and recent order spikes."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        alerts = []
+
+        # ── Low-stock inventory items ──────────────────────────────────────
+        try:
+            low_stock = Inventory.query.filter(
+                Inventory.current_stock <= Inventory.minimum_stock
+            ).order_by(Inventory.current_stock.asc()).limit(10).all()
+            for item in low_stock:
+                alerts.append({
+                    'type': 'low_stock',
+                    'title': f'Low Stock: {item.item_name}',
+                    'message': f'Only {item.current_stock} {item.unit or "units"} remaining (min: {item.minimum_stock})',
+                    'severity': 'warning'
+                })
+        except Exception:
+            pass  # Inventory table may not exist yet
+
+        # ── Orders spike: > 20 pending orders right now ───────────────────
+        try:
+            pending_count = Order.query.filter_by(status='pending').count()
+            if pending_count >= 10:
+                alerts.append({
+                    'type': 'order_spike',
+                    'title': f'High Pending Volume: {pending_count} orders',
+                    'message': 'Many orders are awaiting acceptance. Consider accepting or rejecting in bulk.',
+                    'severity': 'warning'
+                })
+        except Exception:
+            pass
+
+        # ── Long-waiting ready orders (> 15 min not picked up) ────────────
+        try:
+            cutoff = datetime.utcnow() - timedelta(minutes=15)
+            stale_ready = Order.query.filter(
+                Order.status == 'ready',
+                Order.created_at <= cutoff
+            ).count()
+            if stale_ready > 0:
+                alerts.append({
+                    'type': 'order_spike',
+                    'title': f'{stale_ready} Order(s) Not Picked Up',
+                    'message': f'{stale_ready} ready order(s) have been waiting over 15 minutes for pickup.',
+                    'severity': 'error'
+                })
+        except Exception:
+            pass
+
+        return jsonify(alerts), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/owner/orders/payment-status', methods=['GET', 'OPTIONS'])
 def owner_payment_status():
     if request.method == 'OPTIONS':
@@ -2664,11 +2792,81 @@ def owner_payment_status():
         if not user or user.role != 'owner':
             return jsonify({'error': 'Unauthorized'}), 401
         orders = Order.query.order_by(Order.created_at.desc()).limit(100).all()
-        return jsonify([{'order_id': o.order_id, 'total': o.total_amount, 'transaction_id': o.transaction_id, 'status': o.status, 'payment_status': 'PAID' if o.transaction_id and o.transaction_id!='OFFLINE' and o.transaction_id!='CASH' else ('CASH' if o.transaction_id=='CASH' else 'PENDING'), 'created_at': o.created_at.isoformat() if o.created_at else None} for o in orders]), 200
+        result = []
+        for o in orders:
+            items_summary = ', '.join(
+                f"{oi.menu_item.icon or ''} {oi.menu_item.name} ×{oi.quantity}"
+                for oi in (o.items or [])
+                if oi.menu_item
+            ) or '—'
+            result.append({
+                'items_summary': items_summary,
+                'total': o.total_amount,
+                'transaction_id': o.transaction_id,
+                'status': o.status,
+                'payment_status': 'PAID' if o.transaction_id and o.transaction_id not in ('OFFLINE', 'CASH') else ('CASH' if o.transaction_id == 'CASH' else 'PENDING'),
+                'created_at': o.created_at.isoformat() if o.created_at else None
+            })
+        return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 # ==================== OWNER: MENU AVAILABILITY & CASH ORDERS ====================
+@app.route('/api/owner/menu/items', methods=['GET', 'OPTIONS'])
+def owner_list_menu_items():
+    """List all menu items for the manager portal."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        items = MenuItem.query.all()
+        return jsonify([{
+            'id': item.id,
+            'name': item.name,
+            'icon': item.icon,
+            'price': item.price,
+            'desc': item.description,
+            'category': item.category,
+            'available': item.available,
+            'tags': item.tags,
+            'image_url': _resolve_image_url(item.image_url or '')
+        } for item in items]), 200
+    except Exception as e:
+        logger.error(f"Owner menu list error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/owner/menu/items/<int:item_id>', methods=['PUT', 'OPTIONS'])
+def owner_update_menu_item(item_id):
+    """Update a menu item's name, price, and/or availability."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role != 'owner':
+            return jsonify({'error': 'Unauthorized'}), 401
+        data = request.get_json() or {}
+        item = MenuItem.query.get(item_id)
+        if not item:
+            return jsonify({'error': 'Menu item not found'}), 404
+        if 'name' in data:
+            item.name = data['name']
+        if 'price' in data:
+            item.price = float(data['price'])
+        if 'available' in data:
+            item.available = bool(data['available'])
+        db.session.commit()
+        return jsonify({
+            'success': True, 'id': item_id,
+            'name': item.name, 'price': item.price, 'available': item.available
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/owner/menu/<int:item_id>/availability', methods=['PUT', 'OPTIONS'])
 def owner_set_menu_availability(item_id):
     if request.method == 'OPTIONS':
@@ -3227,11 +3425,11 @@ def owner_daily_orders():
         if not user or user.role != 'owner':
             return jsonify({'error': 'Unauthorized'}), 401
         
-        target_date_str = request.args.get('date', date.today().isoformat())
+        target_date_str = request.args.get('date', ist_today().isoformat())
         try:
             target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
         except:
-            target_date = date.today()
+            target_date = ist_today()
         
         logs = DailyOrderLog.query.filter_by(order_date=target_date).order_by(DailyOrderLog.order_time.desc()).all()
         
@@ -3291,7 +3489,8 @@ def owner_create_cash_order():
             customer_phone=data.get('customer_phone', '0000000000'),
             total_amount=0.0,
             transaction_id='CASH',
-            status='accepted'
+            status='accepted',
+            created_at=datetime.utcnow()
         )
         db.session.add(order)
         db.session.flush()
@@ -3388,6 +3587,47 @@ def kitchen_update_status(order_id):
         return jsonify({'success': True}), 200
     except Exception as e:
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/kitchen/stats', methods=['GET', 'OPTIONS'])
+def kitchen_stats():
+    """Persistent kitchen stats — completed today survives reload."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        user = get_auth_user()
+        if not user or user.role not in ['kitchen', 'owner']:
+            return jsonify({'error': 'Unauthorized'}), 401
+        today = date.today()
+        completed_today = Order.query.filter(
+            func.date(Order.created_at) == today,
+            Order.status == 'delivered'
+        ).count()
+        in_queue = Order.query.filter(
+            Order.status.in_(['pending', 'accepted', 'preparing'])
+        ).count()
+        # Avg prep time: minutes between created_at and updated_at for today's delivered orders
+        delivered_today = Order.query.filter(
+            func.date(Order.created_at) == today,
+            Order.status == 'delivered'
+        ).all()
+        avg_prep = None
+        if delivered_today:
+            times = []
+            for o in delivered_today:
+                if o.updated_at and o.created_at:
+                    diff = (o.updated_at - o.created_at).total_seconds() / 60
+                    if 0 < diff < 240:  # sanity cap at 4h
+                        times.append(diff)
+            if times:
+                avg_prep = round(sum(times) / len(times), 1)
+        return jsonify({
+            'completed_today': completed_today,
+            'in_queue': in_queue,
+            'avg_prep_minutes': avg_prep
+        }), 200
+    except Exception as e:
+        logger.error(f"Kitchen stats error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/kitchen/orders/live', methods=['GET', 'OPTIONS'])
@@ -3681,6 +3921,38 @@ def _run_column_migrations():
                     logger.info(f'Migration: added column "{column}"')
             except Exception as e:
                 logger.warning(f'Migration skipped for "{column}": {e}')
+        # ── Fix NULL created_at on existing orders ────────────────────────────
+        # Orders placed before this fix had created_at=NULL, making all
+        # date-based stats (revenue, order count, top dish) return zero.
+        # Backfill using order_id timestamp prefix (ORD<unix_ms>) where possible,
+        # otherwise fall back to NOW() so the column is at least non-NULL.
+        try:
+            conn.execute(db.text("""
+                UPDATE "order"
+                SET created_at = to_timestamp(
+                    CASE
+                        WHEN order_id ~ '^ORD[0-9]{10}'
+                        THEN substring(order_id FROM 4 FOR 10)::bigint
+                        ELSE extract(epoch FROM now())::bigint
+                    END
+                )
+                WHERE created_at IS NULL
+            """))
+            conn.commit()
+            logger.info("Migration: backfilled NULL created_at on order table")
+        except Exception as e:
+            logger.warning(f"Migration: created_at backfill failed: {e}")
+
+        # Set a DB-level default so future rows are never NULL even if app code misses it
+        try:
+            conn.execute(db.text(
+                'ALTER TABLE "order" ALTER COLUMN created_at SET DEFAULT NOW()'
+            ))
+            conn.commit()
+            logger.info("Migration: set DEFAULT NOW() on order.created_at")
+        except Exception as e:
+            logger.warning(f"Migration: created_at default skipped: {e}")
+
     logger.info("Column migrations complete")
 
 

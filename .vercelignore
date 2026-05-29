@@ -1,0 +1,41 @@
+# =============================================================================
+# .vercelignore — files excluded from Vercel deployment
+# =============================================================================
+
+# Secrets — never deploy these
+.env
+.env.*
+firebase-credentials.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Git
+.git/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scratch / dev-only
+scratch.txt
+scratch2.txt
+fix_ui.py
+_inspect.py
+_routes.py
+render_env_vars.txt
+
+# Exports
+*.csv
+*.log
