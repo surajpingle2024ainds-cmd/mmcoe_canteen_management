@@ -4071,13 +4071,38 @@ try:
 except Exception as e:
     logger.warning(f"Some blueprints failed to load: {e}")
 
-# Initialize database (runs on every startup — idempotent)
-with app.app_context():
-    init_db()
+# =============================================================================
+# DATABASE INIT — lazy initialization for Vercel serverless compatibility
+#
+# On Vercel: module is imported fresh on each cold start. Running init_db()
+# at import time blocks and crashes the function before it can serve requests.
+# Solution: run init_db() on the FIRST request instead, inside request context.
+#
+# On local / Render (gunicorn): __name__ == '__main__' or gunicorn import —
+# both trigger the eager init below so the DB is ready before serving.
+# =============================================================================
 
-# =============================================================================
-# app.run() — only when running directly (python app.py)
-# Gunicorn does NOT use this — it imports the app object directly
-# =============================================================================
+_db_initialized = False
+
+@app.before_request
+def _lazy_init_db():
+    global _db_initialized
+    if not _db_initialized:
+        try:
+            init_db()
+            _db_initialized = True
+        except Exception as e:
+            logger.error(f"[DB INIT] Failed: {e}")
+            # Don't crash — let the request fail gracefully with a DB error
+            # instead of a cold-start crash
+
+# Eager init for local dev and Render (gunicorn) — not needed on Vercel
+# but harmless: init_db() is idempotent (create_all skips existing tables)
 if __name__ == '__main__':
-    app.run(debug=not _is_prod, port=int(os.environ.get('PORT', 5000)), host='0.0.0.0')
+    with app.app_context():
+        try:
+            init_db()
+            _db_initialized = True
+        except Exception as e:
+            logger.error(f"[DB INIT] Startup init failed: {e}")
+    app.run(debug=not _is_prod, port=int(os.environ.get('PORT', 5000)), host='0.0.0.0')
