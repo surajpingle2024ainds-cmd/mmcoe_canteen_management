@@ -157,3 +157,4 @@ Thumbs.db
 .cache/
 tmp/
 temp/
+render_env_vars.txt
